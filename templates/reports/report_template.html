@@ -39,17 +39,16 @@
         }
 
         /* --- PORTADA --- */
+        /* --- PORTADA --- */
         .cover-page {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            position: relative;
+            height: 220mm;
             page-break-after: always;
-            padding-top: 40mm;
+            padding-top: 30mm;
         }
 
         .cover-header {
-            border-left: 6px solid #007aff;
+            border-left: 6px solid #7c3aed;
             padding-left: 15px;
             margin-bottom: 50px;
         }
@@ -70,7 +69,10 @@
         }
 
         .cover-details {
-            margin-top: auto;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
             border-top: 1px solid #e2e8f0;
             padding-top: 30px;
             font-size: 10pt;
@@ -88,7 +90,7 @@
         .brand-logo {
             font-size: 20pt;
             font-weight: bold;
-            color: #007aff;
+            color: #00ff88;
             margin-bottom: 20px;
         }
 
