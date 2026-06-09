@@ -27,7 +27,7 @@ def generate_audit_ai_insights(audit_id):
     for r in no_responses:
         q = get_question_by_key(r.question_key)
         if q:
-            failed_controls.append(f"{q['category']}: {q['text']}")
+            failed_controls.append(f"{r.category}: {q['text']}")
             
     # Recolectar hallazgos activos
     active_findings = []
