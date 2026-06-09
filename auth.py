@@ -5,7 +5,11 @@ from functools import wraps
 from flask import request, redirect, url_for, g, current_app, make_response
 from models import User
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'cyber-audit-super-secret-key-12345')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if os.getenv('FLASK_ENV') == 'production':
+        raise RuntimeError('SECRET_KEY must be configured in production')
+    SECRET_KEY = 'dev-only-change-me'
 
 def encode_token(user_id, role):
     try:

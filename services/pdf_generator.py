@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use('Agg')  # Configuración headless obligatoria para servidores
 import matplotlib.pyplot as plt
 from flask import render_template
+from werkzeug.utils import secure_filename
 from weasyprint import HTML
 from models import Audit, Company, Finding, ChecklistResponse, Asset, Evidence
 from database import db
@@ -152,7 +153,8 @@ def build_pdf_report(audit_id):
         chart_uri=chart_uri
     )
     
-    pdf_filename = f"Reporte_Auditoria_{company.company_name.replace(' ', '_')}_{audit.id}.pdf"
+    safe_company_name = secure_filename(company.company_name) or f"company_{company.id}"
+    pdf_filename = f"Reporte_Auditoria_{safe_company_name}_{audit.id}.pdf"
     pdf_path = os.path.join(reports_dir, pdf_filename)
     
     # Compilar a PDF con WeasyPrint

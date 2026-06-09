@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, g, make_response, send_file
+from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, g, make_response, send_file, abort
 from werkzeug.utils import secure_filename
 from database import db
 from models import User, Company, Audit, ChecklistResponse, Finding, Asset, Evidence
@@ -17,7 +17,12 @@ from services.pdf_generator import build_pdf_report
 app = Flask(__name__)
 
 # Configuración de la App
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'cyber-audit-super-secret-key-12345')
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    if os.getenv('FLASK_ENV') == 'production':
+        raise RuntimeError('SECRET_KEY must be configured in production')
+    secret_key = 'dev-only-change-me'
+app.config['SECRET_KEY'] = secret_key
 db_url = os.getenv('DATABASE_URL') or 'sqlite:///audit.db'
 if db_url.startswith('postgres://'):
     db_url = db_url.replace('postgres://', 'postgresql+pg8000://', 1)
@@ -38,9 +43,25 @@ db.init_app(app)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def current_user_can_access_audit(audit):
+    if not g.current_user:
+        return False
+    if g.current_user.role == 'superadmin':
+        return True
+    return audit.auditor_id == g.current_user.id
+
+def get_authorized_audit_or_404(audit_id):
+    audit = Audit.query.get_or_404(audit_id)
+    if not current_user_can_access_audit(audit):
+        abort(403)
+    return audit
+
 # Hook para inyectar el usuario logueado en las plantillas
 @app.before_request
 def load_logged_in_user():
+    if request.path.startswith('/static/uploads/') or request.path.startswith('/static/reports/'):
+        abort(404)
+
     token = request.cookies.get('token')
     g.current_user = None
     if token:
@@ -73,7 +94,14 @@ def login():
             return render_template('login.html')
             
         resp = make_response(redirect(url_for('dashboard')))
-        resp.set_cookie('token', token, httponly=True, samesite='Strict', max_age=86400) # 24 horas
+        resp.set_cookie(
+            'token',
+            token,
+            httponly=True,
+            secure=os.getenv('FLASK_ENV') == 'production',
+            samesite='Strict',
+            max_age=86400
+        ) # 24 horas
         flash(f'¡Bienvenido de nuevo, {user.username}!', 'success')
         return resp
         
@@ -237,7 +265,10 @@ def edit_company(company_id):
 @app.route('/audits')
 @login_required
 def list_audits():
-    audits = Audit.query.order_by(Audit.audit_date.desc()).all()
+    query = Audit.query
+    if g.current_user.role != 'superadmin':
+        query = query.filter_by(auditor_id=g.current_user.id)
+    audits = query.order_by(Audit.audit_date.desc()).all()
     return render_template('audits/list.html', audits=audits)
 
 @app.route('/audits/create', methods=['GET', 'POST'])
@@ -280,7 +311,7 @@ def create_audit():
 @app.route('/audits/<int:audit_id>/workspace')
 @login_required
 def audit_workspace(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     company = audit.company
     
     # Agrupar las respuestas del checklist cargadas en BD
@@ -323,7 +354,7 @@ def audit_workspace(audit_id):
 @app.route('/audits/<int:audit_id>/status', methods=['POST'])
 @login_required
 def update_audit_status(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     status = request.form.get('status')
     if status in ['draft', 'in_progress', 'completed', 'delivered']:
         audit.status = status
@@ -335,7 +366,7 @@ def update_audit_status(audit_id):
 @app.route('/audits/<int:audit_id>/checklist/save', methods=['POST'])
 @login_required
 def save_checklist(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     data = request.json
     
     if not data:
@@ -366,6 +397,7 @@ def save_checklist(audit_id):
 @app.route('/audits/<int:audit_id>/assets', methods=['GET', 'POST'])
 @login_required
 def audit_assets(audit_id):
+    get_authorized_audit_or_404(audit_id)
     if request.method == 'POST':
         # Agregar activo
         asset_type = request.form.get('asset_type')
@@ -396,6 +428,7 @@ def audit_assets(audit_id):
 @app.route('/audits/<int:audit_id>/assets/<int:asset_id>/delete', methods=['POST'])
 @login_required
 def delete_asset(audit_id, asset_id):
+    get_authorized_audit_or_404(audit_id)
     asset = Asset.query.filter_by(audit_id=audit_id, id=asset_id).first_or_404()
     db.session.delete(asset)
     db.session.commit()
@@ -406,6 +439,7 @@ def delete_asset(audit_id, asset_id):
 @app.route('/audits/<int:audit_id>/findings', methods=['GET', 'POST'])
 @login_required
 def audit_findings(audit_id):
+    get_authorized_audit_or_404(audit_id)
     if request.method == 'POST':
         category = request.form.get('category')
         title = request.form.get('title')
@@ -443,6 +477,7 @@ def audit_findings(audit_id):
 @app.route('/audits/<int:audit_id>/findings/<int:finding_id>/delete', methods=['POST'])
 @login_required
 def delete_finding(audit_id, finding_id):
+    get_authorized_audit_or_404(audit_id)
     finding = Finding.query.filter_by(audit_id=audit_id, id=finding_id).first_or_404()
     db.session.delete(finding)
     db.session.commit()
@@ -457,6 +492,7 @@ def delete_finding(audit_id, finding_id):
 @app.route('/audits/<int:audit_id>/evidence/upload', methods=['POST'])
 @login_required
 def upload_evidence(audit_id):
+    get_authorized_audit_or_404(audit_id)
     if 'file' not in request.files:
         flash('No se seleccionó archivo.', 'error')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
@@ -473,14 +509,23 @@ def upload_evidence(audit_id):
         ext = file.filename.rsplit('.', 1)[1].lower()
         import uuid
         unique_name = f"evidence_{audit_id}_{uuid.uuid4().hex[:10]}.{ext}"
+        safe_file_name = secure_filename(file.filename) or unique_name
+        linked_finding_id = None
+        if finding_id:
+            finding = Finding.query.filter_by(audit_id=audit_id, id=finding_id).first()
+            if not finding:
+                flash('El hallazgo seleccionado no pertenece a esta auditoría.', 'error')
+                return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
+            linked_finding_id = finding.id
+
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
         file.save(filepath)
         
         # Registrar en BD
         evidence = Evidence(
             audit_id=audit_id,
-            finding_id=int(finding_id) if finding_id else None,
-            file_name=file.filename,
+            finding_id=linked_finding_id,
+            file_name=safe_file_name,
             file_type=ext,
             file_path=filepath
         )
@@ -493,11 +538,24 @@ def upload_evidence(audit_id):
         
     return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
 
+@app.route('/audits/<int:audit_id>/evidence/<int:evidence_id>')
+@login_required
+def download_evidence(audit_id, evidence_id):
+    get_authorized_audit_or_404(audit_id)
+    evidence = Evidence.query.filter_by(audit_id=audit_id, id=evidence_id).first_or_404()
+    file_path = os.path.realpath(evidence.file_path)
+    upload_root = os.path.realpath(app.config['UPLOAD_FOLDER'])
+
+    if not file_path.startswith(upload_root + os.sep) or not os.path.exists(file_path):
+        abort(404)
+
+    return send_file(file_path, as_attachment=False, download_name=evidence.file_name)
+
 # IA (Módulo 10)
 @app.route('/audits/<int:audit_id>/ai/generate', methods=['POST'])
 @login_required
 def generate_ai(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     
     # Forzar recálculo antes de llamar a IA
     calculate_audit_risk(audit_id)
@@ -515,7 +573,7 @@ def generate_ai(audit_id):
 @app.route('/audits/<int:audit_id>/ai/save', methods=['POST'])
 @login_required
 def save_ai_insights(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     data = request.json
     
     if not data:
@@ -534,6 +592,7 @@ def save_ai_insights(audit_id):
 @app.route('/audits/<int:audit_id>/report')
 @login_required
 def download_report(audit_id):
+    get_authorized_audit_or_404(audit_id)
     # Asegurar que el riesgo esté actualizado
     calculate_audit_risk(audit_id)
     
@@ -554,4 +613,8 @@ def download_report(audit_id):
 # Iniciar servidor
 if __name__ == '__main__':
     # Usar puerto alternativo para evitar colisiones
-    app.run(host='0.0.0.0', port=5005, debug=True)
+    app.run(
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 5005)),
+        debug=os.getenv('FLASK_DEBUG') == '1'
+    )

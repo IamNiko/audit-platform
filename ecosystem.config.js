@@ -8,11 +8,13 @@ module.exports = {
       exec_mode: 'fork',
       watch: false,
       env: {
-        FLASK_ENV: 'development',
+        FLASK_ENV: 'production',
+        FLASK_DEBUG: '0',
         PORT: 5005
       },
       env_production: {
         FLASK_ENV: 'production',
+        FLASK_DEBUG: '0',
         PORT: 5005
       },
       error_file: 'logs/pm2-error.log',

@@ -376,13 +376,15 @@
                             <div class="col-md-4 col-sm-6">
                                 <div class="card card-premium p-2" style="background-color: var(--bg-input);">
                                     {% if ev.file_type in ['png', 'jpg', 'jpeg'] %}
-                                        <a href="/static/uploads/{{ ev.file_path.split('/')[-1] }}" target="_blank">
-                                            <img src="/static/uploads/{{ ev.file_path.split('/')[-1] }}" class="card-img-top rounded img-fluid" style="height: 120px; object-fit: cover;" alt="{{ ev.file_name }}">
+                                        <a href="{{ url_for('download_evidence', audit_id=audit.id, evidence_id=ev.id) }}" target="_blank">
+                                            <img src="{{ url_for('download_evidence', audit_id=audit.id, evidence_id=ev.id) }}" class="card-img-top rounded img-fluid" style="height: 120px; object-fit: cover;" alt="{{ ev.file_name }}">
                                         </a>
                                     {% else %}
+                                        <a href="{{ url_for('download_evidence', audit_id=audit.id, evidence_id=ev.id) }}" target="_blank" class="text-decoration-none">
                                         <div class="d-flex align-items-center justify-content-center bg-card rounded" style="height: 120px; background-color: var(--bg-main);">
                                             <i class="fa-solid fa-file-pdf fs-1 text-danger"></i>
                                         </div>
+                                        </a>
                                     {% endif %}
                                     <div class="card-body p-2 px-1">
                                         <p class="text-white text-truncate small mb-1 fw-medium" title="{{ ev.file_name }}">{{ ev.file_name }}</p>
