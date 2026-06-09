@@ -140,3 +140,7 @@ logs/
 # Evidences uploaded locally
 static/uploads/*
 !static/uploads/.gitkeep
+
+# Generated PDF reports
+static/reports/
+
