@@ -17,10 +17,10 @@ from services.pdf_generator import build_pdf_report
 app = Flask(__name__)
 
 # Configuración de la App
-secret_key = os.getenv('SECRET_KEY')
+secret_key = os.getenv('SECRET_KEY') or os.getenv('JWT_SECRET')
 if not secret_key:
     if os.getenv('FLASK_ENV') == 'production':
-        raise RuntimeError('SECRET_KEY must be configured in production')
+        raise RuntimeError('SECRET_KEY or JWT_SECRET must be configured in production')
     secret_key = 'dev-only-change-me'
 app.config['SECRET_KEY'] = secret_key
 db_url = os.getenv('DATABASE_URL') or 'sqlite:///audit.db'
