@@ -1,6 +1,9 @@
 # app.py
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, g, make_response, send_file
 from werkzeug.utils import secure_filename
 from database import db
