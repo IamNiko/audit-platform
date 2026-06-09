@@ -16,8 +16,10 @@ app = Flask(__name__)
 # Configuración de la App
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'cyber-audit-super-secret-key-12345')
 db_url = os.getenv('DATABASE_URL') or 'sqlite:///audit.db'
-if db_url.startswith('postgresql://'):
-    db_url = db_url.replace('postgresql://', 'postgresql+pg8000://')
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql+pg8000://', 1)
+elif db_url.startswith('postgresql://'):
+    db_url = db_url.replace('postgresql://', 'postgresql+pg8000://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
