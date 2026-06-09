@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Auditorías - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-white mb-0">Auditorías Realizadas</h2>
+        <p class="text-secondary small mb-0">Control global de auditorías técnicas y estados</p>
+    </div>
+    <a href="{{ url_for('create_audit') }}" class="btn btn-premium-primary btn-sm">
+        <i class="fa-solid fa-plus me-1"></i> Iniciar Auditoría
+    </a>
+</div>
+
+<div class="card card-premium p-4">
+    <div class="table-responsive">
+        <table class="table table-premium table-hover" id="auditsTable">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>CUIT</th>
+                    <th>Fecha de Auditoría</th>
+                    <th>Auditor</th>
+                    <th>Riesgo Global</th>
+                    <th>Estado</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for audit in audits %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('detail_company', company_id=audit.company.id) }}" class="text-white text-decoration-none fw-semibold">
+                                {{ audit.company.company_name }}
+                            </a>
+                        </td>
+                        <td class="text-secondary">{{ audit.company.tax_id }}</td>
+                        <td class="text-secondary">{{ audit.audit_date.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="text-secondary">{{ audit.auditor.username }}</td>
+                        <td>
+                            <span class="badge badge-risk-{{ audit.risk_level.lower() }}">
+                                {{ audit.risk_level }} ({{ audit.risk_score }})
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-opacity-25 bg-secondary text-capitalize">
+                                {{ audit.status.replace('_', ' ') }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{{ url_for('audit_workspace', audit_id=audit.id) }}" class="btn btn-premium-primary btn-sm px-2.5 py-1">
+                                    <i class="fa-solid fa-desktop me-1"></i> Workspace
+                                </a>
+                                {% if audit.status in ['completed', 'delivered'] %}
+                                <a href="{{ url_for('download_report', audit_id=audit.id) }}" class="btn btn-outline-success btn-sm px-2">
+                                    <i class="fa-solid fa-file-pdf"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-secondary py-5">
+                            <i class="fa-solid fa-file-invoice-dollar fs-1 mb-2 d-block opacity-30"></i>
+                            No hay auditorías registradas en el sistema.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Cliente - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('list_companies') }}" class="btn btn-premium-secondary btn-sm mb-3">
+        <i class="fa-solid fa-arrow-left me-1"></i> Volver a Clientes
+    </a>
+    <h2 class="fw-bold text-white">Registrar Nuevo Cliente</h2>
+    <p class="text-secondary small">Complete la información general y fiscal de la empresa</p>
+</div>
+
+<div class="card card-premium p-4 col-lg-8">
+    <form action="{{ url_for('create_company') }}" method="POST">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="company_name" class="form-label text-secondary small fw-medium">Nombre de la Empresa *</label>
+                <input type="text" class="form-control form-control-premium" id="company_name" name="company_name" placeholder="Ej: Empresa S.A." required>
+            </div>
+            <div class="col-md-6">
+                <label for="tax_id" class="form-label text-secondary small fw-medium">CUIT / ID Fiscal *</label>
+                <input type="text" class="form-control form-control-premium" id="tax_id" name="tax_id" placeholder="Ej: 30-71123456-9" required>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="industry" class="form-label text-secondary small fw-medium">Industria / Sector *</label>
+                <select class="form-select form-control-premium" id="industry" name="industry" required>
+                    <option value="" disabled selected>Seleccione sector...</option>
+                    <option value="Tecnología">Tecnología / Software</option>
+                    <option value="Finanzas">Finanzas / Seguros</option>
+                    <option value="Salud">Salud / Medicina</option>
+                    <option value="Comercio">Comercio / Retail</option>
+                    <option value="Manufactura">Manufactura / Industria</option>
+                    <option value="Logística">Logística / Transporte</option>
+                    <option value="Servicios">Servicios Profesionales</option>
+                    <option value="Educación">Educación</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="employee_count" class="form-label text-secondary small fw-medium">Cant. Empleados</label>
+                <input type="number" class="form-control form-control-premium" id="employee_count" name="employee_count" placeholder="Ej: 45">
+            </div>
+            <div class="col-md-3">
+                <label for="annual_revenue_range" class="form-label text-secondary small fw-medium">Rango de Facturación</label>
+                <select class="form-select form-control-premium" id="annual_revenue_range" name="annual_revenue_range">
+                    <option value="0 - 20M ARS">0 - 20M ARS</option>
+                    <option value="20M - 100M ARS">20M - 100M ARS</option>
+                    <option value="100M - 500M ARS">100M - 500M ARS</option>
+                    <option value="500M+ ARS">500M+ ARS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="address" class="form-label text-secondary small fw-medium">Dirección Física</label>
+            <input type="text" class="form-control form-control-premium" id="address" name="address" placeholder="Ej: Av. Corrientes 1234, Piso 5">
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label for="city" class="form-label text-secondary small fw-medium">Ciudad</label>
+                <input type="text" class="form-control form-control-premium" id="city" name="city" placeholder="Ej: CABA">
+            </div>
+            <div class="col-md-4">
+                <label for="province" class="form-label text-secondary small fw-medium">Provincia / Estado</label>
+                <input type="text" class="form-control form-control-premium" id="province" name="province" placeholder="Ej: Buenos Aires">
+            </div>
+            <div class="col-md-4">
+                <label for="country" class="form-label text-secondary small fw-medium">País</label>
+                <input type="text" class="form-control form-control-premium" id="country" name="country" value="Argentina">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-premium-primary px-4 py-2">
+            <i class="fa-solid fa-floppy-disk me-1"></i> Registrar Cliente
+        </button>
+    </form>
+</div>
+{% endblock %}

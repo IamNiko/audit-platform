@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Auditoría de Ciberseguridad - {{ company.company_name }}</title>
+    <style>
+        /* Estilos específicos para impresión con WeasyPrint */
+        @page {
+            size: A4;
+            margin: 20mm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 8pt;
+                color: #718096;
+            }
+            @bottom-left {
+                content: "The Mini Hack - Reporte Confidencial";
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 8pt;
+                color: #718096;
+                font-weight: bold;
+            }
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #2d3748;
+            line-height: 1.6;
+            font-size: 10.5pt;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Salto de página */
+        .page-break {
+            page-break-before: always;
+        }
+
+        /* --- PORTADA --- */
+        .cover-page {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            page-break-after: always;
+            padding-top: 40mm;
+        }
+
+        .cover-header {
+            border-left: 6px solid #007aff;
+            padding-left: 15px;
+            margin-bottom: 50px;
+        }
+
+        .cover-title {
+            font-size: 28pt;
+            font-weight: 700;
+            color: #0b0f19;
+            margin: 0 0 10px 0;
+            line-height: 1.1;
+        }
+
+        .cover-subtitle {
+            font-size: 16pt;
+            color: #4a5568;
+            margin: 0;
+            font-weight: 300;
+        }
+
+        .cover-details {
+            margin-top: auto;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 30px;
+            font-size: 10pt;
+            color: #718096;
+        }
+
+        .cover-details table {
+            width: 100%;
+        }
+
+        .cover-details td {
+            padding: 6px 0;
+        }
+
+        .brand-logo {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 20px;
+        }
+
+        /* --- CONTENIDO GENERAL --- */
+        h1 {
+            font-size: 18pt;
+            color: #0b0f19;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+            page-break-after: avoid;
+        }
+
+        h2 {
+            font-size: 14pt;
+            color: #1a202c;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            page-break-after: avoid;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        /* --- METRICAS DE RIESGO --- */
+        .risk-container {
+            display: flex;
+            margin-bottom: 30px;
+            gap: 20px;
+        }
+
+        .risk-box {
+            flex: 1;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .risk-score-value {
+            font-size: 36pt;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .risk-level-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+        }
+
+        /* Colores de nivel de riesgo */
+        .risk-Low { color: #10b981; background-color: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; }
+        .risk-Medium { color: #f59e0b; background-color: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; }
+        .risk-High { color: #f97316; background-color: rgba(249, 115, 22, 0.1); border: 1px solid #f97316; }
+        .risk-Critical { color: #ef4444; background-color: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; }
+
+        .chart-img {
+            display: block;
+            width: 100%;
+            max-width: 160mm;
+            margin: 20px auto;
+            border-radius: 8px;
+        }
+
+        /* --- TABLAS --- */
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+
+        table.data-table th {
+            background-color: #f7fafc;
+            border-bottom: 2px solid #cbd5e0;
+            padding: 10px;
+            font-weight: bold;
+            text-align: left;
+            font-size: 9.5pt;
+        }
+
+        table.data-table td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px;
+            font-size: 9pt;
+        }
+
+        /* --- CARDS DE HALLAZGOS --- */
+        .finding-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+
+        .finding-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #edf2f7;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .finding-title {
+            font-size: 11pt;
+            font-weight: bold;
+            margin: 0;
+            color: #1a202c;
+        }
+
+        .finding-meta {
+            font-size: 8.5pt;
+            color: #718096;
+            margin-bottom: 10px;
+        }
+
+        .finding-recommendation {
+            background-color: #f7fafc;
+            border-left: 3px solid #007aff;
+            padding: 10px;
+            font-size: 9pt;
+            margin-top: 10px;
+        }
+
+        /* --- PLANES DE ACCION --- */
+        .action-plan-box {
+            background-color: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+
+        .action-plan-title {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #0b0f19;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #cbd5e0;
+            padding-bottom: 5px;
+        }
+
+        /* --- EVIDENCIAS --- */
+        .evidence-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .evidence-item {
+            width: 45%;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+
+        .evidence-img {
+            max-width: 100%;
+            max-height: 50mm;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .evidence-caption {
+            font-size: 8pt;
+            color: #718096;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- --- PORTADA --- -->
+    <div class="cover-page">
+        <div>
+            <div class="brand-logo">🛡️ THE MINI HACK</div>
+            <div class="cover-header">
+                <h1 class="cover-title">INFORME EJECUTIVO DE CIBERSEGURIDAD</h1>
+                <h2 class="cover-subtitle">Auditoría Técnica y de Cumplimiento</h2>
+            </div>
+        </div>
+        
+        <div class="cover-details">
+            <table>
+                <tr>
+                    <td style="font-weight: bold; color: #4a5568; width: 30%;">CLIENTE:</td>
+                    <td>{{ company.company_name }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; color: #4a5568;">CUIT / TAX ID:</td>
+                    <td>{{ company.tax_id }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; color: #4a5568;">FECHA DE AUDITORÍA:</td>
+                    <td>{{ audit.audit_date.strftime('%d/%m/%Y') }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; color: #4a5568;">AUDITOR RESPONSABLE:</td>
+                    <td>{{ audit.auditor.username }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; color: #4a5568;">CLASIFICACIÓN:</td>
+                    <td style="color: #ef4444; font-weight: bold;">CONFIDENCIAL</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- --- SECCIÓN 1: RESUMEN EJECUTIVO --- -->
+    <div>
+        <h1>1. Resumen Ejecutivo</h1>
+        
+        <div class="risk-container">
+            <div class="risk-box">
+                <div style="font-size: 10pt; color: #718096; font-weight: bold; text-transform: uppercase;">Riesgo Global</div>
+                <div class="risk-score-value text-{{ audit.risk_level }}">{{ audit.risk_score }}/100</div>
+                <div class="risk-level-badge risk-{{ audit.risk_level }}">{{ audit.risk_level }}</div>
+            </div>
+        </div>
+
+        <p>{{ audit.executive_summary or 'No se ha redactado resumen ejecutivo.' }}</p>
+        
+        <h2>Riesgo por Categoría Analizada</h2>
+        <p>A continuación se detalla el nivel de riesgo relativo identificado en cada uno de los dominios cubiertos por la auditoría técnica:</p>
+        <img class="chart-img" src="{{ chart_uri }}" alt="Gráfico de Riesgo por Categoría">
+    </div>
+
+    <!-- --- SECCIÓN 2: PLAN DE ACCIÓN REMEDIACIÓN --- -->
+    <div class="page-break">
+        <h1>2. Plan de Acción y Mitigación (Remediación)</h1>
+        <p>Basado en los hallazgos y en el análisis automatizado, se propone la siguiente priorización temporal para corregir las brechas de seguridad identificadas:</p>
+        
+        <div class="action-plan-box">
+            <div class="action-plan-title">Plan 30 Días (Urgente)</div>
+            <div style="font-size: 9.5pt; white-space: pre-line;">{{ audit.action_plan_30 or 'Sin acciones configuradas.' }}</div>
+        </div>
+
+        <div class="action-plan-box">
+            <div class="action-plan-title">Plan 60 Días (Mediano Plazo)</div>
+            <div style="font-size: 9.5pt; white-space: pre-line;">{{ audit.action_plan_60 or 'Sin acciones configuradas.' }}</div>
+        </div>
+
+        <div class="action-plan-box">
+            <div class="action-plan-title">Plan 90 Días (Estratégico)</div>
+            <div style="font-size: 9.5pt; white-space: pre-line;">{{ audit.action_plan_90 or 'Sin acciones configuradas.' }}</div>
+        </div>
+    </div>
+
+    <!-- --- SECCIÓN 3: HALLAZGOS CRÍTICOS E IMPORTANTES --- -->
+    {% if critical_findings or important_findings %}
+    <div class="page-break">
+        <h1>3. Detalle de Hallazgos Críticos e Importantes</h1>
+        <p>Lista detallada de las vulnerabilidades específicas identificadas en la infraestructura y los procesos del cliente:</p>
+
+        <!-- Críticos -->
+        {% for f in critical_findings %}
+        <div class="finding-card" style="border-left: 4px solid #ef4444;">
+            <div class="finding-card-header">
+                <span class="finding-title">🚨 {{ f.title }}</span>
+                <span class="risk-level-badge risk-Critical" style="font-size: 7.5pt; padding: 2px 8px;">Critical</span>
+            </div>
+            <div class="finding-meta">Categoría: {{ f.category }} | Probabilidad: {{ f.probability }} | Impacto: {{ f.impact }}</div>
+            <p style="font-size: 9pt; margin-bottom: 5px;"><strong>Descripción:</strong> {{ f.description }}</p>
+            <div class="finding-recommendation">
+                <strong>Recomendación The Mini Hack:</strong> {{ f.recommendation }}
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Importantes (High & Medium) -->
+        {% for f in important_findings %}
+        <div class="finding-card" style="border-left: 4px solid {% if f.risk_level == 'High' %}#f97316{% else %}#f59e0b{% endif %};">
+            <div class="finding-card-header">
+                <span class="finding-title">⚠️ {{ f.title }}</span>
+                <span class="risk-level-badge risk-{{ f.risk_level }}" style="font-size: 7.5pt; padding: 2px 8px;">{{ f.risk_level }}</span>
+            </div>
+            <div class="finding-meta">Categoría: {{ f.category }} | Probabilidad: {{ f.probability }} | Impacto: {{ f.impact }}</div>
+            <p style="font-size: 9pt; margin-bottom: 5px;"><strong>Descripción:</strong> {{ f.description }}</p>
+            <div class="finding-recommendation">
+                <strong>Recomendación The Mini Hack:</strong> {{ f.recommendation }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- --- SECCIÓN 4: INVENTARIO DE ACTIVOS Y CUMPLIMIENTO --- -->
+    <div class="page-break">
+        <h1>4. Inventario de Activos Evaluados</h1>
+        <p>Listado de hardware y dispositivos clave registrados durante la auditoría:</p>
+        
+        {% if assets %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Tipo de Activo</th>
+                    <th>Marca / Modelo</th>
+                    <th>Sistema Operativo</th>
+                    <th>Versión</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for asset in assets %}
+                <tr>
+                    <td><strong>{{ asset.asset_type }}</strong></td>
+                    <td>{{ asset.brand }} {{ asset.model or '' }}</td>
+                    <td>{{ asset.operating_system or 'N/D' }}</td>
+                    <td>{{ asset.version or 'N/D' }}</td>
+                    <td>{{ asset.observations or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No se registraron activos de hardware durante esta auditoría.</p>
+        {% endif %}
+
+        <h2>Conclusiones Generales</h2>
+        <p>{{ audit.recommendations_ai or 'No se han ingresado conclusiones adicionales.' }}</p>
+    </div>
+
+    <!-- --- SECCIÓN 5: EVIDENCIAS FOTOGRÁFICAS / CONFIGURACIONES --- -->
+    {% if evidences %}
+    <div class="page-break">
+        <h1>5. Registro de Evidencias Capturadas</h1>
+        <p>Archivos y capturas de pantalla adjuntas como prueba del estado de los controles evaluados:</p>
+        
+        <div class="evidence-gallery">
+            {% for ev in evidences %}
+            <div class="evidence-item">
+                {% if ev.file_type in ['png', 'jpg', 'jpeg'] %}
+                <img class="evidence-img" src="{{ ev.uri }}" alt="{{ ev.file_name }}">
+                {% else %}
+                <div style="height: 50mm; display: flex; align-items: center; justify-content: center; background-color: #f7fafc; border: 1px dashed #cbd5e0; border-radius: 4px; margin-bottom: 5px;">
+                    <span style="font-size: 24pt;">📄</span>
+                </div>
+                {% endif %}
+                <div class="evidence-caption">{{ ev.file_name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</body>
+</html>

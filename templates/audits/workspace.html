@@ -1,0 +1,677 @@
+{% extends "base.html" %}
+
+{% block title %}Workspace: {{ company.company_name }} - Audit Platform{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Estilos dinámicos para los botones del checklist */
+    .btn-check-yes:checked + .btn-outline-success {
+        background-color: var(--risk-low) !important;
+        color: white !important;
+        border-color: var(--risk-low) !important;
+    }
+    .btn-check-no:checked + .btn-outline-danger {
+        background-color: var(--risk-critical) !important;
+        color: white !important;
+        border-color: var(--risk-critical) !important;
+    }
+    .btn-check-na:checked + .btn-outline-secondary {
+        background-color: var(--text-secondary) !important;
+        color: white !important;
+        border-color: var(--text-secondary) !important;
+    }
+    .checklist-row {
+        border-bottom: 1px solid var(--border-color);
+        padding: 1.25rem 0;
+    }
+    .checklist-row:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Cabecera del Workspace -->
+<div class="card card-premium p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <span class="text-secondary small fw-medium">CLIENTE AUDITADO</span>
+            <h3 class="fw-bold text-white mb-0">{{ company.company_name }}</h3>
+            <p class="text-secondary small mb-0">CUIT: {{ company.tax_id }} | Fecha: {{ audit.audit_date.strftime('%d/%m/%Y') }}</p>
+        </div>
+        
+        <!-- Estado de la Auditoría -->
+        <div class="d-flex align-items-center gap-3">
+            <div>
+                <label for="audit_status" class="form-label text-secondary small fw-medium mb-1 d-block">Estado</label>
+                <select class="form-select form-control-premium form-select-sm" id="audit_status" onchange="updateAuditStatus(this.value)">
+                    <option value="draft" {% if audit.status == 'draft' %}selected{% endif %}>Borrador</option>
+                    <option value="in_progress" {% if audit.status == 'in_progress' %}selected{% endif %}>En Progreso</option>
+                    <option value="completed" {% if audit.status == 'completed' %}selected{% endif %}>Completada</option>
+                    <option value="delivered" {% if audit.status == 'delivered' %}selected{% endif %}>Entregada</option>
+                </select>
+            </div>
+            
+            <!-- Indicador de Postura de Riesgo Global -->
+            <div class="text-center px-3 border-start border-secondary border-opacity-20">
+                <span class="text-secondary small fw-medium d-block mb-1">Riesgo Global</span>
+                <span class="badge badge-risk-{{ audit.risk_level.lower() }} px-3 py-2 fs-6 fw-bold" id="global-risk-badge">
+                    {{ audit.risk_level }} (<span id="global-risk-score">{{ audit.risk_score }}</span>)
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs de Navegación del Workspace -->
+<ul class="nav nav-tabs nav-tabs-premium mb-4" id="workspaceTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="checklist-tab" data-bs-toggle="tab" data-bs-target="#checklist" type="button" role="tab" aria-controls="checklist" aria-selected="true">
+            <i class="fa-solid fa-list-check me-2"></i>Checklist
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false">
+            <i class="fa-solid fa-laptop-code me-2"></i>Inventario ({{ assets|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="hallazgos-tab" data-bs-toggle="tab" data-bs-target="#hallazgos" type="button" role="tab" aria-controls="hallazgos" aria-selected="false">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>Hallazgos ({{ findings|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="evidencias-tab" data-bs-toggle="tab" data-bs-target="#evidencias" type="button" role="tab" aria-controls="evidencias" aria-selected="false">
+            <i class="fa-solid fa-camera me-2"></i>Evidencias ({{ evidences|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="reporte-tab" data-bs-toggle="tab" data-bs-target="#reporte" type="button" role="tab" aria-controls="reporte" aria-selected="false">
+            <i class="fa-solid fa-file-pdf me-2"></i>Informe & IA
+        </button>
+    </li>
+</ul>
+
+<!-- Contenido de los Tabs -->
+<div class="tab-content" id="workspaceTabsContent">
+    
+    <!-- 1. CHECKLIST -->
+    <div class="tab-pane fade show active" id="checklist" role="tabpanel" aria-labelledby="checklist-tab">
+        <div class="card card-premium p-4">
+            <h4 class="text-white fw-bold mb-3">Evaluación de Controles</h4>
+            <p class="text-secondary small mb-4">El progreso se guarda automáticamente a medida que completa el checklist. Si se corta la red, el progreso se guardará en su almacenamiento local y se sincronizará cuando reconecte.</p>
+            
+            <div class="accordion accordion-flush bg-transparent" id="checklistAccordion">
+                {% for category in checklist %}
+                <div class="accordion-item bg-transparent border-secondary border-opacity-20">
+                    <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                        <button class="accordion-button collapsed bg-transparent text-white fw-semibold px-0" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                            <i class="fa-solid fa-shield me-2" style="color: var(--primary-green);"></i> {{ category.category }}
+                        </button>
+                    </h2>
+                    
+                    <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#checklistAccordion">
+                        <div class="accordion-body px-0">
+                            {% for q in category.questions %}
+                            <div class="checklist-row" data-key="{{ q.key }}">
+                                <div class="row align-items-start g-3">
+                                    <div class="col-lg-6">
+                                        <h6 class="text-white mb-1 fw-medium">{{ q.text }}</h6>
+                                        <p class="text-secondary small mb-0">{{ q.description }}</p>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="btn-group btn-group-sm w-100" role="group">
+                                            <input type="radio" class="btn-check btn-check-yes" name="resp-{{ q.key }}" id="yes-{{ q.key }}" value="YES" {% if q.response == 'YES' %}checked{% endif %} onchange="queueAutosave('{{ q.key }}')">
+                                            <label class="btn btn-outline-success" for="yes-{{ q.key }}">Sí</label>
+                                            
+                                            <input type="radio" class="btn-check btn-check-no" name="resp-{{ q.key }}" id="no-{{ q.key }}" value="NO" {% if q.response == 'NO' %}checked{% endif %} onchange="queueAutosave('{{ q.key }}')">
+                                            <label class="btn btn-outline-danger" for="no-{{ q.key }}">No</label>
+                                            
+                                            <input type="radio" class="btn-check btn-check-na" name="resp-{{ q.key }}" id="na-{{ q.key }}" value="NA" {% if q.response == 'NA' %}checked{% endif %} onchange="queueAutosave('{{ q.key }}')">
+                                            <label class="btn btn-outline-secondary" for="na-{{ q.key }}">N/A</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <textarea class="form-control form-control-premium form-control-sm" id="obs-{{ q.key }}" rows="1" placeholder="Observaciones / Desviaciones..." oninput="queueAutosave('{{ q.key }}')">{{ q.observations }}</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. INVENTARIO -->
+    <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
+        <div class="row g-4">
+            <!-- Registrar Activo -->
+            <div class="col-lg-4">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Registrar Activo</h5>
+                    <form action="{{ url_for('audit_assets', audit_id=audit.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label for="asset_type" class="form-label text-secondary small fw-medium">Tipo de Activo *</label>
+                            <select class="form-select form-control-premium" id="asset_type" name="asset_type" required>
+                                <option value="PC">PC de Escritorio</option>
+                                <option value="Notebook">Notebook</option>
+                                <option value="Server">Servidor</option>
+                                <option value="Router">Router</option>
+                                <option value="Switch">Switch</option>
+                                <option value="Printer">Impresora</option>
+                                <option value="Camera">Cámara IP</option>
+                                <option value="Mobile">Dispositivo Móvil</option>
+                            </select>
+                        </div>
+                        
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label for="brand" class="form-label text-secondary small fw-medium">Marca</label>
+                                <input type="text" class="form-control form-control-premium" id="brand" name="brand" placeholder="Ej: Dell" required>
+                            </div>
+                            <div class="col-6">
+                                <label for="model" class="form-label text-secondary small fw-medium">Modelo</label>
+                                <input type="text" class="form-control form-control-premium" id="model" name="model" placeholder="Ej: Latitude 3520">
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label for="operating_system" class="form-label text-secondary small fw-medium">S.O.</label>
+                                <input type="text" class="form-control form-control-premium" id="operating_system" name="operating_system" placeholder="Ej: Windows 11 Pro">
+                            </div>
+                            <div class="col-6">
+                                <label for="version" class="form-label text-secondary small fw-medium">Versión / Parche</label>
+                                <input type="text" class="form-control form-control-premium" id="version" name="version" placeholder="Ej: 23H2">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="observations" class="form-label text-secondary small fw-medium">Observaciones de Seguridad</label>
+                            <textarea class="form-control form-control-premium" id="observations" name="observations" rows="2" placeholder="Ej: Sin actualizar desde 2024, requiere antivirus."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-premium-primary w-100">
+                            <i class="fa-solid fa-plus me-1"></i> Registrar en Inventario
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Listado de Inventario -->
+            <div class="col-lg-8">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Dispositivos y Servidores Registrados</h5>
+                    <div class="table-responsive">
+                        <table class="table table-premium table-hover small">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Marca/Modelo</th>
+                                    <th>Sistema Operativo</th>
+                                    <th>Versión</th>
+                                    <th>Observaciones</th>
+                                    <th class="text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for asset in assets %}
+                                <tr>
+                                    <td><strong>{{ asset.asset_type }}</strong></td>
+                                    <td>{{ asset.brand }} {{ asset.model or '' }}</td>
+                                    <td class="text-secondary">{{ asset.operating_system or '-' }}</td>
+                                    <td class="text-secondary">{{ asset.version or '-' }}</td>
+                                    <td class="text-secondary">{{ asset.observations or '-' }}</td>
+                                    <td class="text-center">
+                                        <form action="{{ url_for('delete_asset', audit_id=audit.id, asset_id=asset.id) }}" method="POST" onsubmit="return confirm('¿Está seguro de remover este activo del inventario?')">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm px-1.5 py-0.5"><i class="fa-solid fa-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-secondary py-5">No se registraron activos en esta auditoría aún.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. HALLAZGOS -->
+    <div class="tab-pane fade" id="hallazgos" role="tabpanel" aria-labelledby="hallazgos-tab">
+        <div class="row g-4">
+            <!-- Crear Hallazgo -->
+            <div class="col-lg-4">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Registrar Hallazgo / Brecha</h5>
+                    <form action="{{ url_for('audit_findings', audit_id=audit.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label for="category" class="form-label text-secondary small fw-medium">Categoría *</label>
+                            <select class="form-select form-control-premium" id="category" name="category" required>
+                                {% for cat in checklist %}
+                                    <option value="{{ cat.category }}">{{ cat.category }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="title" class="form-label text-secondary small fw-medium">Título del Hallazgo *</label>
+                            <input type="text" class="form-control form-control-premium" id="title" name="title" placeholder="Ej: Credenciales de Administrador expuestas" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label text-secondary small fw-medium">Descripción / Evidencia Inicial *</label>
+                            <textarea class="form-control form-control-premium" id="description" name="description" rows="3" placeholder="Detalle cómo se detectó el problema y el riesgo operativo." required></textarea>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label for="impact" class="form-label text-secondary small fw-medium">Impacto *</label>
+                                <select class="form-select form-control-premium" id="impact" name="impact" required>
+                                    <option value="Low">Bajo</option>
+                                    <option value="Medium" selected>Medio</option>
+                                    <option value="High">Alto</option>
+                                    <option value="Critical">Crítico</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label for="probability" class="form-label text-secondary small fw-medium">Probabilidad *</label>
+                                <select class="form-select form-control-premium" id="probability" name="probability" required>
+                                    <option value="Low">Baja</option>
+                                    <option value="Medium" selected>Media</option>
+                                    <option value="High">Alta</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="recommendation" class="form-label text-secondary small fw-medium">Recomendación de Remediación *</label>
+                            <textarea class="form-control form-control-premium" id="recommendation" name="recommendation" rows="2" placeholder="Ej: Implementar doble factor de autenticación e inhabilitar RDP público." required></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-premium-primary w-100">
+                            <i class="fa-solid fa-plus me-1"></i> Registrar Hallazgo
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Listado de Hallazgos -->
+            <div class="col-lg-8">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Hallazgos Identificados</h5>
+                    
+                    {% for f in findings %}
+                        <div class="card card-premium p-3 mb-3 border-start border-4 border-opacity-100 border-{% if f.risk_level == 'Critical' %}danger{% elif f.risk_level == 'High' %}warning{% else %}secondary{% endif %}" style="background-color: var(--bg-input);">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <span class="badge bg-secondary bg-opacity-20 text-white mb-1 small">{{ f.category }}</span>
+                                    <h6 class="text-white fw-bold mb-1">{{ f.title }}</h6>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge badge-risk-{{ f.risk_level.lower() }}">{{ f.risk_level }}</span>
+                                    <form action="{{ url_for('delete_finding', audit_id=audit.id, finding_id=f.id) }}" method="POST" onsubmit="return confirm('¿Eliminar este hallazgo?')">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm py-0.5 px-1.5"><i class="fa-solid fa-trash" style="font-size: 0.75rem;"></i></button>
+                                    </form>
+                                </div>
+                            </div>
+                            <p class="text-secondary small mb-2 mt-1">{{ f.description }}</p>
+                            <div class="bg-card p-2.5 rounded border border-secondary border-opacity-20 small">
+                                <strong style="color: var(--primary-green);"><i class="fa-solid fa-user-shield me-1"></i> Recomendación:</strong>
+                                <span class="text-white">{{ f.recommendation }}</span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-secondary py-5">No se registraron hallazgos específicos para esta auditoría aún.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. EVIDENCIAS -->
+    <div class="tab-pane fade" id="evidencias" role="tabpanel" aria-labelledby="evidencias-tab">
+        <div class="row g-4">
+            <!-- Subir Evidencia -->
+            <div class="col-lg-4">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Subir Evidencia</h5>
+                    <form action="{{ url_for('upload_evidence', audit_id=audit.id) }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="file" class="form-label text-secondary small fw-medium">Archivo *</label>
+                            <input class="form-control form-control-premium" type="file" id="file" name="file" required>
+                            <small class="text-secondary d-block mt-1">Formatos válidos: PNG, JPG, JPEG, PDF, DOCX (Máx. 16MB)</small>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="finding_id" class="form-label text-secondary small fw-medium">Relacionar con Hallazgo (Opcional)</label>
+                            <select class="form-select form-control-premium" id="finding_id" name="finding_id">
+                                <option value="" selected>Ninguno (Evidencia de auditoría general)</option>
+                                {% for f in findings %}
+                                    <option value="{{ f.id }}">{{ f.title }} ({{ f.risk_level }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-premium-primary w-100">
+                            <i class="fa-solid fa-cloud-arrow-up me-1"></i> Subir Archivo
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Galería de Evidencias -->
+            <div class="col-lg-8">
+                <div class="card card-premium p-4">
+                    <h5 class="text-white fw-bold mb-3">Galería de Evidencias</h5>
+                    <div class="row g-3">
+                        {% for ev in evidences %}
+                            <div class="col-md-4 col-sm-6">
+                                <div class="card card-premium p-2" style="background-color: var(--bg-input);">
+                                    {% if ev.file_type in ['png', 'jpg', 'jpeg'] %}
+                                        <a href="/static/uploads/{{ ev.file_path.split('/')[-1] }}" target="_blank">
+                                            <img src="/static/uploads/{{ ev.file_path.split('/')[-1] }}" class="card-img-top rounded img-fluid" style="height: 120px; object-fit: cover;" alt="{{ ev.file_name }}">
+                                        </a>
+                                    {% else %}
+                                        <div class="d-flex align-items-center justify-content-center bg-card rounded" style="height: 120px; background-color: var(--bg-main);">
+                                            <i class="fa-solid fa-file-pdf fs-1 text-danger"></i>
+                                        </div>
+                                    {% endif %}
+                                    <div class="card-body p-2 px-1">
+                                        <p class="text-white text-truncate small mb-1 fw-medium" title="{{ ev.file_name }}">{{ ev.file_name }}</p>
+                                        <small class="text-secondary" style="font-size: 0.75rem;">Relación: {% if ev.finding %}{{ ev.finding.title }}{% else %}General{% endif %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="col-12 text-center text-secondary py-5">No se subieron archivos de evidencia para esta auditoría.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. REPORTE & IA -->
+    <div class="tab-pane fade" id="reporte" role="tabpanel" aria-labelledby="reporte-tab">
+        <div class="row g-4">
+            <!-- Generación de Insights por IA -->
+            <div class="col-lg-7">
+                <div class="card card-premium p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="text-white fw-bold mb-0">Redacción y Asistencia AI</h5>
+                        <button type="button" class="btn btn-premium-secondary btn-sm" id="btn-generate-ai" onclick="runAIGeneration()">
+                            <i class="fa-solid fa-wand-magic-sparkles me-1" style="color: var(--primary-green);"></i> Autogenerar con IA
+                        </button>
+                    </div>
+                    <p class="text-secondary small mb-4">La IA generará propuestas basadas en los controles fallidos y hallazgos registrados. Revise, edite y apruebe las sugerencias de redacción del reporte antes de descargarlo.</p>
+                    
+                    <div id="ai-loading" class="text-center py-4 d-none">
+                        <div class="spinner-border" role="status" style="color: var(--primary-green);">
+                            <span class="visually-hidden">Procesando...</span>
+                        </div>
+                        <p class="text-secondary small mt-2">The Mini Hack AI analizando postura de seguridad y redactando planes de acción...</p>
+                    </div>
+
+                    <div id="ai-content-form">
+                        <div class="mb-3">
+                            <label for="executive_summary" class="form-label text-secondary small fw-medium">1. Resumen Ejecutivo (Visión General de Ciberseguridad)</label>
+                            <textarea class="form-control form-control-premium" id="executive_summary" rows="5" placeholder="Postura general del cliente, sectores expuestos y criticidad operativa...">{{ audit.executive_summary or '' }}</textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="recommendations_ai" class="form-label text-secondary small fw-medium">2. Conclusiones Generales & Recomendaciones Principales</label>
+                            <textarea class="form-control form-control-premium" id="recommendations_ai" rows="4" placeholder="Recomendaciones organizacionales generales...">{{ audit.recommendations_ai or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="action_plan_30" class="form-label text-secondary small fw-medium">3. Plan de Acción 30 Días (Urgente - Técnico)</label>
+                            <textarea class="form-control form-control-premium" id="action_plan_30" rows="3" placeholder="Puntos urgentes a corregir de inmediato...">{{ audit.action_plan_30 or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="action_plan_60" class="form-label text-secondary small fw-medium">4. Plan de Acción 60 Días (Mediano Plazo)</label>
+                            <textarea class="form-control form-control-premium" id="action_plan_60" rows="3" placeholder="Configuraciones y consolidación de backups, antivirus, inventarios...">{{ audit.action_plan_60 or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="action_plan_90" class="form-label text-secondary small fw-medium">5. Plan de Acción 90 Días (Estratégico)</label>
+                            <textarea class="form-control form-control-premium" id="action_plan_90" rows="3" placeholder="Capacitaciones, simulacros y políticas organizacionales...">{{ audit.action_plan_90 or '' }}</textarea>
+                        </div>
+
+                        <button type="button" class="btn btn-premium-primary px-4 py-2 mt-2" onclick="saveAIInsights()">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descargar Reporte PDF -->
+            <div class="col-lg-5">
+                <div class="card card-premium p-4 text-center h-100 d-flex flex-column justify-content-center align-items-center">
+                    <i class="fa-solid fa-file-pdf fs-1 text-danger mb-3 opacity-60"></i>
+                    <h4 class="text-white fw-bold">Reporte PDF Corporativo</h4>
+                    <p class="text-secondary small px-3">Genere el reporte ejecutivo automatizado en formato PDF para entregar al cliente. Contiene portada, gráficos de riesgo y plan de acción de 30/60/90 días.</p>
+                    
+                    <a href="{{ url_for('download_report', audit_id=audit.id) }}" class="btn btn-danger btn-lg px-4 mt-3" style="background-color: #ef4444; border-color: #ef4444;">
+                        <i class="fa-solid fa-download me-2"></i> Descargar Informe PDF
+                    </a>
+                    
+                    <div class="mt-4 text-secondary small px-3">
+                        <i class="fa-solid fa-triangle-exclamation me-1 text-warning"></i>
+                        Asegúrese de <strong>Guardar Cambios</strong> en la sección de IA para que los resúmenes y planes se incluyan correctamente en el reporte generado.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Conservar la pestaña activa al recargar (usando el hash de la URL)
+    document.addEventListener("DOMContentLoaded", function () {
+        const hash = window.location.hash;
+        if (hash) {
+            const triggerEl = document.querySelector(`button[data-bs-target="${hash}"]`);
+            if (triggerEl) {
+                const tab = new bootstrap.Tab(triggerEl);
+                tab.show();
+            }
+        }
+        
+        // Registrar clicks en los tabs para actualizar el hash
+        const tabTriggerEls = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabTriggerEls.forEach(triggerEl => {
+            triggerEl.addEventListener('shown.bs.tab', function (event) {
+                window.location.hash = event.target.getAttribute('data-bs-target');
+            });
+        });
+    });
+
+    // Cambiar estado de la auditoría
+    function updateAuditStatus(status) {
+        showSaveIndicator(true);
+        const formData = new FormData();
+        formData.append('status', status);
+        
+        fetch("{{ url_for('update_audit_status', audit_id=audit.id) }}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            showSaveIndicator(false);
+            if (data.status === 'success') {
+                console.log("Estado guardado");
+            } else {
+                alert("Error al actualizar estado");
+            }
+        })
+        .catch(err => {
+            showSaveIndicator(false);
+            console.error(err);
+        });
+    }
+
+    // AUTOSAVE CHECKLIST
+    let autosaveTimeout = null;
+    let pendingChanges = {};
+
+    function queueAutosave(key) {
+        showSaveIndicator(true);
+        
+        // Obtener respuesta
+        const radios = document.getElementsByName(`resp-${key}`);
+        let responseVal = 'NA';
+        for (let r of radios) {
+            if (r.checked) responseVal = r.value;
+        }
+        
+        // Obtener observaciones
+        const obs = document.getElementById(`obs-${key}`).value;
+        
+        pendingChanges[key] = {
+            key: key,
+            response: responseVal,
+            observations: obs
+        };
+        
+        // Guardar en localStorage como fallback
+        localStorage.setItem(`audit_{{ audit.id }}_pending`, JSON.stringify(pendingChanges));
+        
+        // Debounce de 1.5 segundos
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = setTimeout(executeAutosave, 1500);
+    }
+
+    function executeAutosave() {
+        const responses = Object.values(pendingChanges);
+        
+        fetch("{{ url_for('save_checklist', audit_id=audit.id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ responses: responses })
+        })
+        .then(res => res.json())
+        .then(data => {
+            showSaveIndicator(false);
+            if (data.status === 'success') {
+                // Limpiar cambios guardados de localStorage
+                pendingChanges = {};
+                localStorage.removeItem(`audit_{{ audit.id }}_pending`);
+                
+                // Actualizar risk badges en tiempo real
+                document.getElementById('global-risk-score').innerText = data.risk_score;
+                const badge = document.getElementById('global-risk-badge');
+                badge.className = `badge badge-risk-${data.risk_level.toLowerCase()} px-3 py-2 fs-6 fw-bold`;
+                // Reemplazar el texto pero mantener el span del score
+                badge.innerHTML = `${data.risk_level} (<span id="global-risk-score">${data.risk_score}</span>)`;
+            }
+        })
+        .catch(err => {
+            // Mantener en localStorage ante fallos de conexión
+            showSaveIndicator(false);
+            console.warn("Error de conexión. Sincronización pendiente guardada en local storage.", err);
+        });
+    }
+
+    // Cargar pendientes de localStorage al iniciar por si falló la sesión anterior
+    document.addEventListener("DOMContentLoaded", function() {
+        const saved = localStorage.getItem(`audit_{{ audit.id }}_pending`);
+        if (saved) {
+            pendingChanges = JSON.parse(saved);
+            console.log("Detectados cambios locales pendientes. Sincronizando con servidor...");
+            executeAutosave();
+        }
+    });
+
+    // ASISTENTE AI
+    function runAIGeneration() {
+        const btn = document.getElementById('btn-generate-ai');
+        const loading = document.getElementById('ai-loading');
+        const form = document.getElementById('ai-content-form');
+        
+        btn.disabled = true;
+        loading.classList.remove('d-none');
+        form.classList.add('d-none');
+        
+        fetch("{{ url_for('generate_ai', audit_id=audit.id) }}", {
+            method: 'POST'
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            loading.classList.add('d-none');
+            form.classList.remove('d-none');
+            
+            if (data.status === 'success') {
+                // Completar los textareas con la data de la IA
+                document.getElementById('executive_summary').value = data.insights.executive_summary;
+                document.getElementById('recommendations_ai').value = data.insights.recommendations_ai;
+                document.getElementById('action_plan_30').value = data.insights.action_plan_30;
+                document.getElementById('action_plan_60').value = data.insights.action_plan_60;
+                document.getElementById('action_plan_90').value = data.insights.action_plan_90;
+                
+                alert("¡Insights de IA generados correctamente! Por favor, revíselos y guarde los cambios.");
+            } else {
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            loading.classList.add('d-none');
+            form.classList.remove('d-none');
+            alert("Error al conectar con el asistente AI.");
+            console.error(err);
+        });
+    }
+
+    // GUARDAR INSIGHTS AI
+    function saveAIInsights() {
+        showSaveIndicator(true);
+        
+        const payload = {
+            executive_summary: document.getElementById('executive_summary').value,
+            recommendations_ai: document.getElementById('recommendations_ai').value,
+            action_plan_30: document.getElementById('action_plan_30').value,
+            action_plan_60: document.getElementById('action_plan_60').value,
+            action_plan_90: document.getElementById('action_plan_90').value
+        };
+        
+        fetch("{{ url_for('save_ai_insights', audit_id=audit.id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            showSaveIndicator(false);
+            if (data.status === 'success') {
+                alert("Redacción de informe guardada con éxito.");
+            } else {
+                alert("Error al guardar insights.");
+            }
+        })
+        .catch(err => {
+            showSaveIndicator(false);
+            alert("Error de red.");
+            console.error(err);
+        });
+    }
+</script>
+{% endblock %}

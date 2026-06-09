@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Cliente: {{ company.company_name }} - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('list_companies') }}" class="btn btn-premium-secondary btn-sm mb-3">
+        <i class="fa-solid fa-arrow-left me-1"></i> Volver a Clientes
+    </a>
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="fw-bold text-white mb-1">{{ company.company_name }}</h2>
+            <span class="badge bg-secondary bg-opacity-25 text-white">{{ company.industry }}</span>
+            <span class="text-secondary small ms-2"><i class="fa-solid fa-location-dot me-1"></i>{{ company.city }}, {{ company.province }}</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('edit_company', company_id=company.id) }}" class="btn btn-premium-secondary btn-sm">
+                <i class="fa-solid fa-pencil me-1"></i> Editar Cliente
+            </a>
+            <a href="{{ url_for('create_audit', company_id=company.id) }}" class="btn btn-premium-primary btn-sm">
+                <i class="fa-solid fa-file-shield me-1"></i> Iniciar Auditoría
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Ficha del Cliente -->
+    <div class="col-lg-4">
+        <div class="card card-premium p-4">
+            <h5 class="text-white fw-semibold mb-3 border-bottom border-secondary border-opacity-20 pb-2">Datos de la Empresa</h5>
+            
+            <div class="mb-3">
+                <small class="text-secondary d-block">CUIT / Identificación Fiscal</small>
+                <span class="text-white fw-medium">{{ company.tax_id }}</span>
+            </div>
+            
+            <div class="mb-3">
+                <small class="text-secondary d-block">Dirección</small>
+                <span class="text-white fw-medium">{{ company.address or '-' }}</span>
+            </div>
+            
+            <div class="mb-3">
+                <small class="text-secondary d-block">País / Región</small>
+                <span class="text-white fw-medium">{{ company.country }}</span>
+            </div>
+
+            <div class="row mb-1">
+                <div class="col-6">
+                    <small class="text-secondary d-block">Empleados</small>
+                    <span class="text-white fw-medium">{{ company.employee_count or 'N/D' }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-secondary d-block">Facturación</small>
+                    <span class="text-white fw-medium">{{ company.annual_revenue_range or 'N/D' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial de Auditorías -->
+    <div class="col-lg-8">
+        <div class="card card-premium p-4">
+            <h5 class="text-white fw-semibold mb-3 border-bottom border-secondary border-opacity-20 pb-2">Historial de Auditorías</h5>
+            
+            <div class="table-responsive">
+                <table class="table table-premium table-hover small">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Auditor</th>
+                            <th>Nivel Riesgo</th>
+                            <th>Estado</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for audit in audits %}
+                            <tr>
+                                <td class="text-white fw-medium">{{ audit.audit_date.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td class="text-secondary">{{ audit.auditor.username }}</td>
+                                <td>
+                                    <span class="badge badge-risk-{{ audit.risk_level.lower() }}">
+                                        {{ audit.risk_level }} ({{ audit.risk_score }})
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-opacity-25 bg-secondary text-capitalize">
+                                        {{ audit.status.replace('_', ' ') }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex justify-content-center gap-2">
+                                        <a href="{{ url_for('audit_workspace', audit_id=audit.id) }}" class="btn btn-premium-primary btn-sm px-2.5 py-1">
+                                            <i class="fa-solid fa-desktop me-1"></i> Workspace
+                                        </a>
+                                        {% if audit.status in ['completed', 'delivered'] %}
+                                        <a href="{{ url_for('download_report', audit_id=audit.id) }}" class="btn btn-outline-success btn-sm px-2">
+                                            <i class="fa-solid fa-file-pdf"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-secondary py-5">
+                                    <i class="fa-solid fa-file-invoice fs-2 mb-2 d-block opacity-30"></i>
+                                    No se realizaron auditorías para este cliente todavía.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Cliente - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('detail_company', company_id=company.id) }}" class="btn btn-premium-secondary btn-sm mb-3">
+        <i class="fa-solid fa-arrow-left me-1"></i> Volver a Detalles
+    </a>
+    <h2 class="fw-bold text-white">Editar Cliente: {{ company.company_name }}</h2>
+    <p class="text-secondary small">Actualice la información general y fiscal de la empresa</p>
+</div>
+
+<div class="card card-premium p-4 col-lg-8">
+    <form action="{{ url_for('edit_company', company_id=company.id) }}" method="POST">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="company_name" class="form-label text-secondary small fw-medium">Nombre de la Empresa *</label>
+                <input type="text" class="form-control form-control-premium" id="company_name" name="company_name" value="{{ company.company_name }}" required>
+            </div>
+            <div class="col-md-6">
+                <label for="tax_id" class="form-label text-secondary small fw-medium">CUIT / ID Fiscal *</label>
+                <input type="text" class="form-control form-control-premium" id="tax_id" name="tax_id" value="{{ company.tax_id }}" required>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="industry" class="form-label text-secondary small fw-medium">Industria / Sector *</label>
+                <select class="form-select form-control-premium" id="industry" name="industry" required>
+                    <option value="Tecnología" {% if company.industry == 'Tecnología' %}selected{% endif %}>Tecnología / Software</option>
+                    <option value="Finanzas" {% if company.industry == 'Finanzas' %}selected{% endif %}>Finanzas / Seguros</option>
+                    <option value="Salud" {% if company.industry == 'Salud' %}selected{% endif %}>Salud / Medicina</option>
+                    <option value="Comercio" {% if company.industry == 'Comercio' %}selected{% endif %}>Comercio / Retail</option>
+                    <option value="Manufactura" {% if company.industry == 'Manufactura' %}selected{% endif %}>Manufactura / Industria</option>
+                    <option value="Logística" {% if company.industry == 'Logística' %}selected{% endif %}>Logística / Transporte</option>
+                    <option value="Servicios" {% if company.industry == 'Servicios' %}selected{% endif %}>Servicios Profesionales</option>
+                    <option value="Educación" {% if company.industry == 'Educación' %}selected{% endif %}>Educación</option>
+                    <option value="Otro" {% if company.industry not in ['Tecnología', 'Finanzas', 'Salud', 'Comercio', 'Manufactura', 'Logística', 'Servicios', 'Educación'] %}selected{% endif %}>Otro</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="employee_count" class="form-label text-secondary small fw-medium">Cant. Empleados</label>
+                <input type="number" class="form-control form-control-premium" id="employee_count" name="employee_count" value="{{ company.employee_count or 0 }}">
+            </div>
+            <div class="col-md-3">
+                <label for="annual_revenue_range" class="form-label text-secondary small fw-medium">Rango de Facturación</label>
+                <select class="form-select form-control-premium" id="annual_revenue_range" name="annual_revenue_range">
+                    <option value="0 - 20M ARS" {% if company.annual_revenue_range == '0 - 20M ARS' %}selected{% endif %}>0 - 20M ARS</option>
+                    <option value="20M - 100M ARS" {% if company.annual_revenue_range == '20M - 100M ARS' %}selected{% endif %}>20M - 100M ARS</option>
+                    <option value="100M - 500M ARS" {% if company.annual_revenue_range == '100M - 500M ARS' %}selected{% endif %}>100M - 500M ARS</option>
+                    <option value="500M+ ARS" {% if company.annual_revenue_range == '500M+ ARS' %}selected{% endif %}>500M+ ARS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="address" class="form-label text-secondary small fw-medium">Dirección Física</label>
+            <input type="text" class="form-control form-control-premium" id="address" name="address" value="{{ company.address or '' }}">
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label for="city" class="form-label text-secondary small fw-medium">Ciudad</label>
+                <input type="text" class="form-control form-control-premium" id="city" name="city" value="{{ company.city or '' }}">
+            </div>
+            <div class="col-md-4">
+                <label for="province" class="form-label text-secondary small fw-medium">Provincia / Estado</label>
+                <input type="text" class="form-control form-control-premium" id="province" name="province" value="{{ company.province or '' }}">
+            </div>
+            <div class="col-md-4">
+                <label for="country" class="form-label text-secondary small fw-medium">País</label>
+                <input type="text" class="form-control form-control-premium" id="country" name="country" value="{{ company.country or 'Argentina' }}">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-premium-primary px-4 py-2">
+            <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cambios
+        </button>
+    </form>
+</div>
+{% endblock %}

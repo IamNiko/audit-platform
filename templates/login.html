@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar Sesión - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-5 col-lg-4">
+        <div class="text-center mb-4">
+            <i class="fa-solid fa-shield-halved fs-1 mb-2" style="color: var(--primary-green);"></i>
+            <h3 class="fw-bold text-white">THE MINI HACK</h3>
+            <p class="text-secondary small">Plataforma de Auditoría Tecnológica</p>
+        </div>
+        
+        <div class="card card-premium p-4">
+            <h4 class="text-white mb-4 fw-semibold text-center">Acceso Consultores</h4>
+            
+            <form action="{{ url_for('login') }}" method="POST">
+                <div class="mb-3">
+                    <label for="username" class="form-label text-secondary small fw-medium">Usuario / Email</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-input border-secondary border-opacity-20 text-secondary" style="border: 1px solid var(--border-color) !important;">
+                            <i class="fa-solid fa-user"></i>
+                        </span>
+                        <input type="text" class="form-control form-control-premium" id="username" name="username" placeholder="admin" required>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="password" class="form-label text-secondary small fw-medium">Contraseña</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-input border-secondary border-opacity-20 text-secondary" style="border: 1px solid var(--border-color) !important;">
+                            <i class="fa-solid fa-lock"></i>
+                        </span>
+                        <input type="password" class="form-control form-control-premium" id="password" name="password" placeholder="••••••••••••" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-premium-primary w-100 py-2.5">
+                    <i class="fa-solid fa-arrow-right-to-bracket me-2"></i> Ingresar al Sistema
+                </button>
+            </form>
+        </div>
+        
+        <div class="text-center mt-4 text-secondary small">
+            <i class="fa-solid fa-circle-info me-1"></i> Credenciales de prueba: <code>admin</code> / <code>adminpassword123</code>
+        </div>
+    </div>
+</div>
+{% endblock %}

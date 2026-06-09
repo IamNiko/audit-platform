@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Global - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-white mb-0">Dashboard de Seguridad</h2>
+        <p class="text-secondary small mb-0">Métricas consolidadas de clientes y riesgos</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('create_company') }}" class="btn btn-premium-secondary btn-sm">
+            <i class="fa-solid fa-plus me-1"></i> Nuevo Cliente
+        </a>
+        <a href="{{ url_for('create_audit') }}" class="btn btn-premium-primary btn-sm">
+            <i class="fa-solid fa-file-shield me-1"></i> Nueva Auditoría
+        </a>
+    </div>
+</div>
+
+<!-- Tarjetas de Métricas Core -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card card-premium p-3">
+            <span class="text-secondary small fw-medium">Clientes Totales</span>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <h2 class="fw-bold mb-0 text-white">{{ total_companies }}</h2>
+                <i class="fa-solid fa-building fs-3 opacity-50" style="color: var(--primary-green);"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-premium p-3">
+            <span class="text-secondary small fw-medium">Auditorías Realizadas</span>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <h2 class="fw-bold mb-0 text-white">{{ total_audits }}</h2>
+                <i class="fa-solid fa-file-shield text-info fs-3 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-premium p-3">
+            <span class="text-secondary small fw-medium">Indicadores Críticos de Incumplimiento</span>
+            <div class="row g-2 mt-2">
+                <div class="col-4 border-end border-secondary border-opacity-20 text-center">
+                    <h4 class="fw-bold mb-0 text-danger">{{ no_mfa_pct }}%</h4>
+                    <small class="text-secondary" style="font-size: 0.75rem;">Sin MFA</small>
+                </div>
+                <div class="col-4 border-end border-secondary border-opacity-20 text-center">
+                    <h4 class="fw-bold mb-0 text-warning">{{ no_backups_pct }}%</h4>
+                    <small class="text-secondary" style="font-size: 0.75rem;">Sin Backup Daily</small>
+                </div>
+                <div class="col-4 text-center">
+                    <h4 class="fw-bold mb-0 text-orange" style="color: var(--risk-high);">{{ insecure_remote_pct }}%</h4>
+                    <small class="text-secondary" style="font-size: 0.75rem;">RDP Expuesto</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Gráficos de Riesgo -->
+    <div class="col-lg-8">
+        <div class="card card-premium p-4 h-100">
+            <h5 class="text-white fw-semibold mb-4"><i class="fa-solid fa-chart-simple me-2" style="color: var(--primary-green);"></i>Riesgo Promedio por Industria</h5>
+            <div style="height: 300px; position: relative;">
+                {% if industry_stats %}
+                    <canvas id="industryChart"></canvas>
+                {% else %}
+                    <div class="d-flex h-100 align-items-center justify-content-center text-secondary">
+                        <i class="fa-solid fa-folder-open me-2"></i> No hay datos disponibles para graficar.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top 10 Hallazgos -->
+    <div class="col-lg-4">
+        <div class="card card-premium p-4 h-100">
+            <h5 class="text-white fw-semibold mb-3"><i class="fa-solid fa-triangle-exclamation text-warning me-2"></i>Hallazgos más Frecuentes</h5>
+            <div class="list-group list-group-flush bg-transparent">
+                {% for f in top_findings %}
+                    <div class="list-group-item bg-transparent text-white border-secondary border-opacity-20 px-0 py-2.5 d-flex justify-content-between align-items-start small">
+                        <div class="pe-2">
+                            <div class="fw-medium text-white">{{ f.title }}</div>
+                            <span class="text-secondary" style="font-size: 0.75rem;">{{ f.category }}</span>
+                        </div>
+                        <span class="badge bg-danger rounded-pill">{{ f.count }}</span>
+                    </div>
+                {% else %}
+                    <div class="text-center text-secondary py-5">
+                        <i class="fa-solid fa-shield-check fs-2 mb-2 d-block opacity-40"></i>
+                        No se registraron hallazgos aún.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Últimas Auditorías -->
+    <div class="col-lg-6">
+        <div class="card card-premium p-4 h-100">
+            <h5 class="text-white fw-semibold mb-3"><i class="fa-solid fa-clock-rotate-left text-info me-2"></i>Auditorías Recientes</h5>
+            <div class="table-responsive">
+                <table class="table table-premium table-hover small">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Nivel Riesgo</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in recent_audits %}
+                            <tr>
+                                <td><a href="{{ url_for('detail_company', company_id=a.company.id) }}" class="text-white text-decoration-none fw-medium">{{ a.company.company_name }}</a></td>
+                                <td class="text-secondary">{{ a.audit_date.strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    <span class="badge badge-risk-{{ a.risk_level.lower() }}">{{ a.risk_level }} ({{ a.risk_score }})</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-opacity-25 bg-secondary text-capitalize">{{ a.status.replace('_', ' ') }}</span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('audit_workspace', audit_id=a.id) }}" class="btn btn-premium-primary btn-sm px-2 py-0.5" title="Abrir Workspace">
+                                        <i class="fa-solid fa-desktop"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-secondary py-4">No hay auditorías registradas.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Riesgo por tamaño de empresa -->
+    <div class="col-lg-6">
+        <div class="card card-premium p-4 h-100">
+            <h5 class="text-white fw-semibold mb-4"><i class="fa-solid fa-chart-pie me-2" style="color: var(--primary-green);"></i>Riesgo Promedio por Facturación</h5>
+            <div style="height: 250px; position: relative;">
+                {% if size_stats %}
+                    <canvas id="sizeChart"></canvas>
+                {% else %}
+                    <div class="d-flex h-100 align-items-center justify-content-center text-secondary">
+                        <i class="fa-solid fa-folder-open me-2"></i> No hay datos suficientes.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Grafico de Industrias
+        {% if industry_stats %}
+        const industryCtx = document.getElementById('industryChart');
+        if (industryCtx) {
+            new Chart(industryCtx, {
+                type: 'bar',
+                data: {
+                    labels: {{ industry_stats.keys()|list|tojson }},
+                    datasets: [{
+                        label: 'Score de Riesgo Promedio',
+                        data: {{ industry_stats.values()|list|tojson }},
+                        backgroundColor: 'rgba(124, 58, 237, 0.4)',
+                        borderColor: '#7c3aed',
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' },
+                            min: 0,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+        {% endif %}
+
+        // Grafico de Tamaños de Empresa (Revenue)
+        {% if size_stats %}
+        const sizeCtx = document.getElementById('sizeChart');
+        if (sizeCtx) {
+            new Chart(sizeCtx, {
+                type: 'line',
+                data: {
+                    labels: {{ size_stats.keys()|list|tojson }},
+                    datasets: [{
+                        label: 'Score de Riesgo',
+                        data: {{ size_stats.values()|list|tojson }},
+                        backgroundColor: 'rgba(0, 255, 136, 0.15)',
+                        borderColor: '#00ff88',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' },
+                            min: 0,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+        {% endif %}
+    });
+</script>
+{% endblock %}

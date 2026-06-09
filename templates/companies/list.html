@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-white mb-0">Clientes Registrados</h2>
+        <p class="text-secondary small mb-0">Gestión y registro histórico de empresas</p>
+    </div>
+    <a href="{{ url_for('create_company') }}" class="btn btn-premium-primary btn-sm">
+        <i class="fa-solid fa-plus me-1"></i> Registrar Cliente
+    </a>
+</div>
+
+<div class="card card-premium p-4">
+    <!-- Buscador sencillo client-side -->
+    <div class="mb-3 col-md-4">
+        <div class="input-group">
+            <span class="input-group-text bg-input border-secondary border-opacity-20 text-secondary" style="border: 1px solid var(--border-color) !important;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input type="text" id="searchClient" class="form-control form-control-premium" placeholder="Buscar por nombre o CUIT...">
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-premium table-hover" id="companiesTable">
+            <thead>
+                <tr>
+                    <th>Nombre de Empresa</th>
+                    <th>CUIT / ID Fiscal</th>
+                    <th>Industria</th>
+                    <th>Ubicación</th>
+                    <th>Empleados</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for company in companies %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('detail_company', company_id=company.id) }}" class="text-white text-decoration-none fw-semibold">
+                                {{ company.company_name }}
+                            </a>
+                        </td>
+                        <td class="text-secondary">{{ company.tax_id }}</td>
+                        <td><span class="badge bg-secondary bg-opacity-25 text-white">{{ company.industry or 'N/D' }}</span></td>
+                        <td class="text-secondary">{{ company.city }}, {{ company.province }}</td>
+                        <td class="text-secondary">{{ company.employee_count or '-' }}</td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{{ url_for('detail_company', company_id=company.id) }}" class="btn btn-premium-secondary btn-sm px-2 py-1" title="Ver Detalle / Historial">
+                                    <i class="fa-solid fa-eye me-1"></i> Ver
+                                </a>
+                                <a href="{{ url_for('edit_company', company_id=company.id) }}" class="btn btn-outline-warning btn-sm px-2 py-1" title="Editar">
+                                    <i class="fa-solid fa-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-secondary py-5">
+                            <i class="fa-solid fa-building-circle-exclamation fs-1 mb-2 d-block opacity-30"></i>
+                            No hay clientes registrados en el sistema.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('searchClient').addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase();
+        const rows = document.querySelectorAll('#companiesTable tbody tr');
+        
+        rows.forEach(row => {
+            const name = row.cells[0]?.textContent.toLowerCase() || '';
+            const taxId = row.cells[1]?.textContent.toLowerCase() || '';
+            if (name.includes(query) || taxId.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Audit Platform - The Mini Hack{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar (only if user is logged in) -->
+            {% if g.get('current_user') %}
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse collapse-horizontal" id="sidebarMenu">
+                <div class="position-sticky pt-3 d-flex flex-column justify-content-between h-100 pb-4">
+                    <div>
+                        <div class="d-flex align-items-center px-3 mb-4 gap-2">
+                            <i class="fa-solid fa-shield-halved fs-3" style="color: var(--primary-green);"></i>
+                            <div>
+                                <h6 class="mb-0 fw-bold text-white">THE MINI HACK</h6>
+                                <small class="text-secondary" style="font-size: 0.75rem;">Audit & Compliance</small>
+                            </div>
+                        </div>
+                        
+                        <ul class="nav flex-column gap-1 px-2">
+                            <li class="nav-item">
+                                <a class="nav-link-premium {% if request.path == '/' or request.path.startswith('/dashboard') %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                                    <i class="fa-solid fa-chart-pie"></i>
+                                    <span>Dashboard Global</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link-premium {% if request.path.startswith('/companies') %}active{% endif %}" href="{{ url_for('list_companies') }}">
+                                    <i class="fa-solid fa-building"></i>
+                                    <span>Clientes / Empresas</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link-premium {% if request.path.startswith('/audits') and not request.path.startswith('/companies') %}active{% endif %}" href="{{ url_for('list_audits') }}">
+                                    <i class="fa-solid fa-file-shield"></i>
+                                    <span>Auditorías</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="px-2">
+                        <hr class="bg-secondary my-3">
+                        <div class="d-flex align-items-center gap-3 px-3 mb-3">
+                            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 36px; height: 36px;">
+                                <i class="fa-solid fa-user-tie"></i>
+                            </div>
+                            <div style="min-width: 0;">
+                                <p class="mb-0 text-white text-truncate fw-semibold" style="font-size: 0.85rem;">{{ g.current_user.username }}</p>
+                                <span class="badge bg-primary text-capitalize" style="font-size: 0.65rem;">{{ g.current_user.role }}</span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger w-100 btn-sm">
+                            <i class="fa-solid fa-arrow-right-from-bracket me-2"></i> Cerrar Sesión
+                        </a>
+                    </div>
+                </div>
+            </nav>
+            {% endif %}
+
+            <!-- Main Content Area -->
+            <main class="{% if g.get('current_user') %}col-md-9 ms-sm-auto col-lg-10{% else %}col-12{% endif %} px-md-4 py-4">
+                <!-- Mobile Navbar Header (only if logged in) -->
+                {% if g.get('current_user') %}
+                <div class="d-md-none d-flex justify-content-between align-items-center mb-4 bg-dark-blue p-3 rounded border border-secondary" style="background-color: var(--bg-card); border-color: var(--border-color);">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-shield-halved" style="color: var(--primary-green);"></i>
+                        <span class="fw-bold text-white mb-0" style="font-size: 0.95rem;">THE MINI HACK</span>
+                    </div>
+                    <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                </div>
+                {% endif %}
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="row">
+                            <div class="col-12">
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{% if category == 'error' %}danger{% elif category == 'success' %}success{% else %}info{% endif %} alert-dismissible fade show bg-opacity-10 text-white" role="alert" style="background-color: rgba(0,0,0,0.2); border-color: {% if category == 'error' %}var(--risk-critical){% elif category == 'success' %}var(--risk-low){% else %}var(--accent-blue){% endif %};">
+                                        <i class="fa-solid {% if category == 'error' %}fa-circle-xmark text-danger{% elif category == 'success' %}fa-circle-check text-success{% else %}fa-circle-info text-info{% endif %} me-2"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Autosave Indicator -->
+    <div id="save-indicator">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="color: var(--primary-green);"></span>
+        <span class="text-secondary">Guardando progreso...</span>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    
+    <!-- Script base for notifications or indicator -->
+    <script>
+        function showSaveIndicator(saving) {
+            const ind = document.getElementById('save-indicator');
+            if (!ind) return;
+            if (saving) {
+                ind.style.display = 'flex';
+                ind.querySelector('span.text-secondary').innerText = 'Guardando progreso...';
+                ind.querySelector('.spinner-border').style.display = 'inline-block';
+            } else {
+                ind.querySelector('span.text-secondary').innerText = 'Guardado';
+                ind.querySelector('.spinner-border').style.display = 'none';
+                setTimeout(() => {
+                    ind.style.display = 'none';
+                }, 1500);
+            }
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
