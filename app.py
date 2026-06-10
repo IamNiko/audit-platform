@@ -53,7 +53,7 @@ limiter = Limiter(
 )
 
 # Protección CSRF (formularios y AJAX vía header X-CSRFToken)
-app.config['WTF_CSRF_TIME_LIMIT'] = None  # válido mientras dure la sesión
+app.config['WTF_CSRF_TIME_LIMIT'] = 28800  # 8 horas
 csrf = CSRFProtect(app)
 
 @app.errorhandler(CSRFError)
@@ -143,7 +143,8 @@ def login():
             return render_template('login.html')
 
         if not user.is_active:
-            flash('Cuenta desactivada. Contacta al administrador.', 'error')
+            # Mismo mensaje genérico — no confirmar existencia de cuenta
+            flash('Credenciales incorrectas.', 'error')
             return render_template('login.html')
 
         # Determinar el siguiente paso en el flujo de autenticación
@@ -693,7 +694,7 @@ def download_report(audit_id):
         print(f"Error generando reporte PDF: {e}")
         import traceback
         traceback.print_exc()
-        flash(f'Error al procesar el reporte: {str(e)}', 'error')
+        flash('Error al generar el reporte. Intente nuevamente.', 'error')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
 
 # ─────────────────── FLUJO DE AUTENTICACIÓN ───────────────────────────────
@@ -786,6 +787,7 @@ def auth_2fa_setup():
 
 
 @app.route('/auth/2fa/verify', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 @partial_token_required('2fa_verify')
 def auth_2fa_verify():
     import pyotp
