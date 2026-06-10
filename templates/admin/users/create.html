@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Crear Usuario - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="mb-4">
+            <a href="{{ url_for('admin_users') }}" class="text-secondary small">
+                <i class="fa-solid fa-arrow-left me-1"></i> Volver a Usuarios
+            </a>
+            <h4 class="fw-bold text-white mt-2 mb-0">
+                <i class="fa-solid fa-user-plus me-2" style="color:var(--primary-green);"></i>Nuevo Usuario
+            </h4>
+            <p class="text-secondary small">El usuario deberá cambiar la contraseña y configurar 2FA al primer login.</p>
+        </div>
+
+        <div class="card card-premium p-4">
+            <form method="POST" action="{{ url_for('admin_create_user') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-medium">Nombre de usuario</label>
+                    <input type="text" class="form-control form-control-premium" name="username"
+                           placeholder="ej: jgomez" required autocomplete="off">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-medium">Email</label>
+                    <input type="email" class="form-control form-control-premium" name="email"
+                           placeholder="ej: jgomez@empresa.com" required autocomplete="off">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-medium">Rol</label>
+                    <select class="form-control form-control-premium" name="role">
+                        <option value="auditor" selected>Auditor</option>
+                        <option value="superadmin">Superadmin</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-secondary small fw-medium">
+                        Contraseña temporal
+                        <span class="text-secondary" style="font-weight:400;">(opcional — se genera automáticamente si se deja vacío)</span>
+                    </label>
+                    <input type="text" class="form-control form-control-premium" name="temp_password"
+                           placeholder="Dejar vacío para generar automáticamente" autocomplete="off">
+                    <small class="text-secondary">La contraseña temporal se mostrará una sola vez al crear el usuario.</small>
+                </div>
+
+                <div class="alert text-white" role="alert"
+                     style="background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.3); font-size:0.85rem;">
+                    <i class="fa-solid fa-circle-info me-2 text-warning"></i>
+                    El usuario estará obligado a cambiar su contraseña y configurar 2FA al primer login.
+                </div>
+
+                <button type="submit" class="btn btn-premium-primary w-100 py-2 mt-2">
+                    <i class="fa-solid fa-user-plus me-2"></i> Crear Usuario
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

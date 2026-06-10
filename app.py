@@ -1,6 +1,10 @@
 # app.py
 
 import os
+import re
+import io
+import base64
+import secrets
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,7 +16,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from database import db, configure_database
 from models import User, Company, Audit, ChecklistResponse, Finding, Asset, Evidence
-from auth import encode_token, decode_token, login_required, role_required
+from auth import encode_token, decode_token, login_required, role_required, partial_token_required
 from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
 from services.risk_engine import calculate_audit_risk, calculate_finding_risk
 from services.ai_service import generate_audit_ai_insights
@@ -59,6 +63,30 @@ def handle_csrf_error(e):
     flash('La sesión expiró o el formulario es inválido. Intente nuevamente.', 'error')
     return redirect(request.referrer or url_for('login'))
 
+@app.errorhandler(500)
+def handle_500(e):
+    return render_template('errors/500.html'), 500
+
+@app.errorhandler(403)
+def handle_403(e):
+    return render_template('errors/403.html'), 403
+
+
+def validate_password_strength(password):
+    """Retorna lista de errores; lista vacía si la contraseña es válida."""
+    errors = []
+    if len(password) < 12:
+        errors.append('Mínimo 12 caracteres.')
+    if not re.search(r'[A-Z]', password):
+        errors.append('Al menos una letra mayúscula.')
+    if not re.search(r'[a-z]', password):
+        errors.append('Al menos una letra minúscula.')
+    if not re.search(r'\d', password):
+        errors.append('Al menos un número.')
+    if not re.search(r'[!@#$%^&*()\-_=+\[\]{};:\'",.\<>/?\\|`~]', password):
+        errors.append('Al menos un carácter especial (!@#$%...).')
+    return errors
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -86,45 +114,64 @@ def load_logged_in_user():
     if token:
         payload = decode_token(token)
         if not isinstance(payload, str):
-            g.current_user = User.query.get(payload['sub'])
+            user = User.query.get(payload['sub'])
+            if user and user.is_active:
+                g.current_user = user
 
 # ----------------- RUTAS DE AUTENTICACION -----------------
 
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute; 30 per hour', methods=['POST'])
 def login():
-    if g.current_user:
-        return redirect(url_for('dashboard'))
-        
+    # Si ya está autenticado completamente, redirigir al dashboard
+    token = request.cookies.get('token')
+    if token:
+        payload = decode_token(token)
+        if isinstance(payload, dict) and payload.get('state') == 'authenticated':
+            return redirect(url_for('dashboard'))
+
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
         user = User.query.filter_by(username=username).first()
-        if not user or not user.check_password(password):
-            # Probar también por email
+        if not user:
             user = User.query.filter_by(email=username).first()
-            if not user or not user.check_password(password):
-                flash('Credenciales incorrectas.', 'error')
-                return render_template('login.html')
-                
-        token = encode_token(user.id, user.role)
+
+        if not user or not user.check_password(password):
+            flash('Credenciales incorrectas.', 'error')
+            return render_template('login.html')
+
+        if not user.is_active:
+            flash('Cuenta desactivada. Contacta al administrador.', 'error')
+            return render_template('login.html')
+
+        # Determinar el siguiente paso en el flujo de autenticación
+        if user.must_change_password:
+            next_state = 'change_password'
+            next_url = url_for('auth_change_password')
+        elif not user.totp_enabled:
+            next_state = '2fa_setup'
+            next_url = url_for('auth_2fa_setup')
+        else:
+            next_state = '2fa_verify'
+            next_url = url_for('auth_2fa_verify')
+
+        token = encode_token(user.id, user.role, state=next_state)
         if not token:
             flash('Error al generar sesión.', 'error')
             return render_template('login.html')
-            
-        resp = make_response(redirect(url_for('dashboard')))
+
+        resp = make_response(redirect(next_url))
         resp.set_cookie(
-            'token',
-            token,
+            'token', token,
             httponly=True,
             secure=os.getenv('FLASK_ENV') == 'production',
             samesite='Strict',
-            max_age=86400
-        ) # 24 horas
-        flash(f'¡Bienvenido de nuevo, {user.username}!', 'success')
+            max_age=3600  # 1 hora para tokens parciales
+        )
         return resp
-        
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -649,9 +696,230 @@ def download_report(audit_id):
         flash(f'Error al procesar el reporte: {str(e)}', 'error')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
 
+# ─────────────────── FLUJO DE AUTENTICACIÓN ───────────────────────────────
+
+@app.route('/auth/change-password', methods=['GET', 'POST'])
+@partial_token_required('change_password')
+def auth_change_password():
+    if request.method == 'POST':
+        new_pass = request.form.get('new_password', '')
+        confirm  = request.form.get('confirm_password', '')
+
+        if new_pass != confirm:
+            flash('Las contraseñas no coinciden.', 'error')
+            return render_template('auth/change_password.html')
+
+        errors = validate_password_strength(new_pass)
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            return render_template('auth/change_password.html')
+
+        user = g.current_user
+        user.set_password(new_pass)
+        user.must_change_password = False
+        db.session.commit()
+
+        next_state = '2fa_setup' if not user.totp_enabled else '2fa_verify'
+        next_url   = url_for('auth_2fa_setup') if not user.totp_enabled else url_for('auth_2fa_verify')
+
+        token = encode_token(user.id, user.role, state=next_state)
+        resp = make_response(redirect(next_url))
+        resp.set_cookie('token', token, httponly=True,
+                        secure=os.getenv('FLASK_ENV') == 'production',
+                        samesite='Strict', max_age=3600)
+        flash('Contraseña actualizada. Configurá tu 2FA a continuación.', 'success')
+        return resp
+
+    return render_template('auth/change_password.html')
+
+
+@app.route('/auth/2fa/setup', methods=['GET', 'POST'])
+@partial_token_required('2fa_setup')
+def auth_2fa_setup():
+    import pyotp
+    import qrcode
+
+    user = g.current_user
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().replace(' ', '')
+        if not user.totp_secret:
+            flash('Error de configuración. Recargá la página.', 'error')
+            return redirect(url_for('auth_2fa_setup'))
+
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code, valid_window=1):
+            user.totp_enabled = True
+            db.session.commit()
+
+            token = encode_token(user.id, user.role, state='authenticated')
+            resp = make_response(redirect(url_for('dashboard')))
+            resp.set_cookie('token', token, httponly=True,
+                            secure=os.getenv('FLASK_ENV') == 'production',
+                            samesite='Strict', max_age=86400)
+            flash(f'¡Bienvenido, {user.username}! 2FA activado correctamente.', 'success')
+            return resp
+        else:
+            flash('Código incorrecto. Verificá la hora de tu dispositivo.', 'error')
+
+    # GET — generar QR
+    if not user.totp_secret:
+        user.totp_secret = pyotp.random_base32()
+        db.session.commit()
+
+    totp = pyotp.TOTP(user.totp_secret)
+    uri  = totp.provisioning_uri(name=user.email, issuer_name='Audit — The Mini Hack')
+
+    qr = qrcode.QRCode(version=1,
+                       error_correction=qrcode.constants.ERROR_CORRECT_L,
+                       box_size=6, border=4)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='black', back_color='white')
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    return render_template('auth/2fa_setup.html', qr_b64=qr_b64, secret=user.totp_secret)
+
+
+@app.route('/auth/2fa/verify', methods=['GET', 'POST'])
+@partial_token_required('2fa_verify')
+def auth_2fa_verify():
+    import pyotp
+
+    user = g.current_user
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().replace(' ', '')
+
+        if not user.totp_secret or not user.totp_enabled:
+            flash('Error de configuración 2FA. Contactá al administrador.', 'error')
+            resp = make_response(redirect(url_for('login')))
+            resp.delete_cookie('token')
+            return resp
+
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code, valid_window=1):
+            token = encode_token(user.id, user.role, state='authenticated')
+            resp = make_response(redirect(url_for('dashboard')))
+            resp.set_cookie('token', token, httponly=True,
+                            secure=os.getenv('FLASK_ENV') == 'production',
+                            samesite='Strict', max_age=86400)
+            flash(f'¡Bienvenido, {user.username}!', 'success')
+            return resp
+        else:
+            flash('Código 2FA incorrecto.', 'error')
+
+    return render_template('auth/2fa_verify.html')
+
+
+# ─────────────────── ADMIN: GESTIÓN DE USUARIOS ───────────────────────────
+
+@app.route('/admin/users')
+@login_required
+@role_required('superadmin')
+def admin_users():
+    users = User.query.order_by(User.created_at.desc()).all()
+    return render_template('admin/users/list.html', users=users)
+
+
+@app.route('/admin/users/create', methods=['GET', 'POST'])
+@login_required
+@role_required('superadmin')
+def admin_create_user():
+    if request.method == 'POST':
+        username     = request.form.get('username', '').strip()
+        email        = request.form.get('email', '').strip().lower()
+        role         = request.form.get('role', 'auditor')
+        temp_password = request.form.get('temp_password', '').strip()
+
+        if role not in ('superadmin', 'auditor'):
+            flash('Rol inválido.', 'error')
+            return render_template('admin/users/create.html')
+
+        if not username or not email:
+            flash('Usuario y email son obligatorios.', 'error')
+            return render_template('admin/users/create.html')
+
+        if User.query.filter_by(username=username).first():
+            flash(f'El usuario "{username}" ya existe.', 'error')
+            return render_template('admin/users/create.html')
+
+        if User.query.filter_by(email=email).first():
+            flash(f'El email "{email}" ya está registrado.', 'error')
+            return render_template('admin/users/create.html')
+
+        if not temp_password:
+            temp_password = secrets.token_urlsafe(12)
+
+        user = User(username=username, email=email, role=role,
+                    must_change_password=True, totp_enabled=False)
+        user.set_password(temp_password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash(
+            f'Usuario "{username}" creado. Contraseña temporal: {temp_password} — '
+            f'Compartila de forma segura. No se mostrará nuevamente.',
+            'warning'
+        )
+        return redirect(url_for('admin_users'))
+
+    return render_template('admin/users/create.html')
+
+
+@app.route('/admin/users/<int:user_id>/toggle', methods=['POST'])
+@login_required
+@role_required('superadmin')
+def admin_toggle_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == g.current_user.id:
+        flash('No podés desactivar tu propia cuenta.', 'error')
+        return redirect(url_for('admin_users'))
+    user.is_active = not user.is_active
+    db.session.commit()
+    estado = 'activado' if user.is_active else 'desactivado'
+    flash(f'Usuario "{user.username}" {estado}.', 'success')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@role_required('superadmin')
+def admin_reset_password(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == g.current_user.id:
+        flash('No podés resetear tu propia contraseña desde aquí.', 'error')
+        return redirect(url_for('admin_users'))
+    temp_password = secrets.token_urlsafe(12)
+    user.set_password(temp_password)
+    user.must_change_password = True
+    db.session.commit()
+    flash(
+        f'Contraseña de "{user.username}" reseteada. Temporal: {temp_password} — '
+        f'Compartila de forma segura. No se volverá a mostrar.',
+        'warning'
+    )
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users/<int:user_id>/reset-2fa', methods=['POST'])
+@login_required
+@role_required('superadmin')
+def admin_reset_2fa(user_id):
+    user = User.query.get_or_404(user_id)
+    user.totp_secret  = None
+    user.totp_enabled = False
+    db.session.commit()
+    flash(f'2FA de "{user.username}" reseteado. El usuario deberá configurar un nuevo dispositivo al próximo login.', 'success')
+    return redirect(url_for('admin_users'))
+
+
 # Iniciar servidor
 if __name__ == '__main__':
-    # Usar puerto alternativo para evitar colisiones
     app.run(
         host='0.0.0.0',
         port=int(os.getenv('PORT', 5005)),

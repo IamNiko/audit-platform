@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold text-white mb-0"><i class="fa-solid fa-users-gear me-2" style="color:var(--primary-green);"></i>Gestión de Usuarios</h4>
+        <small class="text-secondary">{{ users|length }} usuario(s) registrado(s)</small>
+    </div>
+    <a href="{{ url_for('admin_create_user') }}" class="btn btn-premium-primary btn-sm">
+        <i class="fa-solid fa-user-plus me-2"></i>Nuevo Usuario
+    </a>
+</div>
+
+<div class="card card-premium">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th class="text-secondary fw-medium px-4 py-3">Usuario</th>
+                    <th class="text-secondary fw-medium py-3">Email</th>
+                    <th class="text-secondary fw-medium py-3">Rol</th>
+                    <th class="text-secondary fw-medium py-3">2FA</th>
+                    <th class="text-secondary fw-medium py-3">Estado</th>
+                    <th class="text-secondary fw-medium py-3">Primer Login</th>
+                    <th class="text-secondary fw-medium py-3 text-end pe-4">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td class="px-4 py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center text-white"
+                                 style="width:32px; height:32px; background: var(--primary-green); opacity: {{ '1' if user.is_active else '0.4' }}; font-size:0.75rem; font-weight:700;">
+                                {{ user.username[0].upper() }}
+                            </div>
+                            <span class="text-white fw-medium">{{ user.username }}</span>
+                            {% if user.id == g.current_user.id %}
+                            <span class="badge bg-secondary" style="font-size:0.6rem;">Tú</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="py-3 text-secondary">{{ user.email }}</td>
+                    <td class="py-3">
+                        {% if user.role == 'superadmin' %}
+                        <span class="badge" style="background: rgba(220,53,69,0.15); color: #ea868f; border: 1px solid rgba(220,53,69,0.3);">superadmin</span>
+                        {% else %}
+                        <span class="badge" style="background: rgba(13,110,253,0.15); color: #6ea8fe; border: 1px solid rgba(13,110,253,0.3);">auditor</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3">
+                        {% if user.totp_enabled %}
+                        <span class="text-success small"><i class="fa-solid fa-shield-check me-1"></i>Activo</span>
+                        {% else %}
+                        <span class="text-warning small"><i class="fa-solid fa-shield-exclamation me-1"></i>Sin configurar</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3">
+                        {% if user.is_active %}
+                        <span class="text-success small"><i class="fa-solid fa-circle-check me-1"></i>Activo</span>
+                        {% else %}
+                        <span class="text-danger small"><i class="fa-solid fa-circle-xmark me-1"></i>Desactivado</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3">
+                        {% if user.must_change_password %}
+                        <span class="text-warning small"><i class="fa-solid fa-clock me-1"></i>Pendiente</span>
+                        {% else %}
+                        <span class="text-secondary small"><i class="fa-solid fa-check me-1"></i>Completado</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 text-end pe-4">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <!-- Reset 2FA -->
+                            {% if user.totp_enabled %}
+                            <form method="POST" action="{{ url_for('admin_reset_2fa', user_id=user.id) }}"
+                                  onsubmit="return confirm('¿Resetear 2FA de {{ user.username }}?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-warning"
+                                        title="Resetear 2FA" style="font-size:0.75rem;">
+                                    <i class="fa-solid fa-mobile-screen"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+
+                            <!-- Reset Password -->
+                            {% if user.id != g.current_user.id %}
+                            <form method="POST" action="{{ url_for('admin_reset_password', user_id=user.id) }}"
+                                  onsubmit="return confirm('¿Resetear contraseña de {{ user.username }}? La nueva contraseña temporal se mostrará una sola vez.')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary"
+                                        title="Resetear contraseña" style="font-size:0.75rem;">
+                                    <i class="fa-solid fa-key"></i>
+                                </button>
+                            </form>
+
+                            <!-- Toggle Activo -->
+                            <form method="POST" action="{{ url_for('admin_toggle_user', user_id=user.id) }}"
+                                  onsubmit="return confirm('¿{{ 'Desactivar' if user.is_active else 'Activar' }} a {{ user.username }}?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="btn btn-sm {{ 'btn-outline-danger' if user.is_active else 'btn-outline-success' }}"
+                                        title="{{ 'Desactivar' if user.is_active else 'Activar' }}" style="font-size:0.75rem;">
+                                    <i class="fa-solid {{ 'fa-ban' if user.is_active else 'fa-circle-check' }}"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-secondary py-4">No hay usuarios registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

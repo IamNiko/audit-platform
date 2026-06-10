@@ -10,6 +10,10 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='auditor')  # 'superadmin', 'auditor'
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    must_change_password = db.Column(db.Boolean, default=True, nullable=False)
+    totp_secret = db.Column(db.String(32), nullable=True)
+    totp_enabled = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     audits = db.relationship('Audit', backref='auditor', lazy=True)
@@ -26,6 +30,9 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'role': self.role,
+            'is_active': self.is_active,
+            'totp_enabled': self.totp_enabled,
+            'must_change_password': self.must_change_password,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -35,7 +42,7 @@ class Company(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     company_name = db.Column(db.String(150), nullable=False)
-    tax_id = db.Column(db.String(50), nullable=False)
+    tax_id = db.Column(db.String(50), nullable=False, unique=True)
     address = db.Column(db.String(255))
     city = db.Column(db.String(100))
     province = db.Column(db.String(100))

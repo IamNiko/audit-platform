@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Configurar 2FA - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-6 col-lg-5">
+        <div class="text-center mb-4">
+            <i class="fa-solid fa-mobile-screen fs-1 mb-2" style="color: var(--primary-green);"></i>
+            <h3 class="fw-bold text-white">Configurar Autenticación 2FA</h3>
+            <p class="text-secondary small">Escanea el código QR con Google Authenticator o Authy.</p>
+        </div>
+
+        <div class="card card-premium p-4">
+            <!-- Paso 1: QR -->
+            <div class="text-center mb-3">
+                <div class="d-inline-block p-2 bg-white rounded-3 mb-3">
+                    <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR 2FA" style="width:180px; height:180px;">
+                </div>
+                <p class="text-secondary small mb-1">¿No podés escanear? Ingresá la clave manual:</p>
+                <code class="text-white" style="font-size:0.85rem; letter-spacing:2px;">{{ secret }}</code>
+            </div>
+
+            <hr style="border-color: var(--border-color);">
+
+            <!-- Paso 2: Verificación -->
+            <p class="text-secondary small text-center mb-3">
+                Ingresá el código de 6 dígitos que muestra tu app para confirmar la configuración.
+            </p>
+
+            <form method="POST" action="{{ url_for('auth_2fa_setup') }}" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-input text-secondary" style="border: 1px solid var(--border-color) !important;">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </span>
+                        <input type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
+                               class="form-control form-control-premium text-center fw-bold"
+                               name="code" placeholder="000 000" required
+                               style="font-size:1.3rem; letter-spacing:4px;" autofocus>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-premium-primary w-100 py-2">
+                    <i class="fa-solid fa-check me-2"></i> Verificar y Activar 2FA
+                </button>
+            </form>
+        </div>
+
+        <p class="text-secondary small text-center mt-3">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Una vez activado, necesitarás este código en cada inicio de sesión.
+        </p>
+    </div>
+</div>
+{% endblock %}

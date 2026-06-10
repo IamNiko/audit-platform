@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Verificación 2FA - Audit Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-5 col-lg-4">
+        <div class="text-center mb-4">
+            <i class="fa-solid fa-shield-halved fs-1 mb-2" style="color: var(--primary-green);"></i>
+            <h3 class="fw-bold text-white">Verificación en dos pasos</h3>
+            <p class="text-secondary small">Ingresá el código de tu aplicación de autenticación.</p>
+        </div>
+
+        <div class="card card-premium p-4">
+            <form method="POST" action="{{ url_for('auth_2fa_verify') }}" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-4">
+                    <label class="form-label text-secondary small fw-medium text-center d-block">Código de 6 dígitos</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-input text-secondary" style="border: 1px solid var(--border-color) !important;">
+                            <i class="fa-solid fa-mobile-screen"></i>
+                        </span>
+                        <input type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="7"
+                               class="form-control form-control-premium text-center fw-bold"
+                               name="code" placeholder="000 000" required
+                               style="font-size:1.4rem; letter-spacing:6px;" autofocus>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-premium-primary w-100 py-2">
+                    <i class="fa-solid fa-arrow-right-to-bracket me-2"></i> Ingresar al Sistema
+                </button>
+            </form>
+
+            <hr style="border-color: var(--border-color);" class="my-3">
+            <p class="text-secondary small text-center mb-0">
+                ¿Perdiste acceso a tu dispositivo? Contactá al administrador.
+            </p>
+        </div>
+
+        <div class="text-center mt-3">
+            <a href="{{ url_for('logout') }}" class="text-secondary small">
+                <i class="fa-solid fa-arrow-left me-1"></i> Volver al login
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

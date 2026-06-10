@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Error del Servidor - Audit Platform{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="text-center">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size:4rem; color: var(--risk-high);"></i>
+        <h2 class="fw-bold text-white mt-3">Error interno del servidor</h2>
+        <p class="text-secondary">Ocurrió un problema inesperado. El equipo fue notificado.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-premium-primary mt-2">
+            <i class="fa-solid fa-house me-2"></i>Volver al Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -51,6 +51,8 @@ def seed_db(reset=False, force=False):
                 username='admin',
                 email=os.getenv('SEED_ADMIN_EMAIL', 'admin@audit.local'),
                 role='superadmin',
+                must_change_password=True,
+                totp_enabled=False,
             )
             admin.set_password(get_seed_password('SEED_ADMIN_PASSWORD', 'admin'))
             db.session.add(admin)
@@ -63,6 +65,8 @@ def seed_db(reset=False, force=False):
                 username='auditor',
                 email=os.getenv('SEED_AUDITOR_EMAIL', 'auditor@audit.local'),
                 role='auditor',
+                must_change_password=True,
+                totp_enabled=False,
             )
             auditor.set_password(get_seed_password('SEED_AUDITOR_PASSWORD', 'auditor'))
             db.session.add(auditor)
