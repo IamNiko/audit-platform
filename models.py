@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from database import db
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -10,7 +10,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='auditor')  # 'superadmin', 'auditor'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     audits = db.relationship('Audit', backref='auditor', lazy=True)
 
@@ -43,7 +43,7 @@ class Company(db.Model):
     industry = db.Column(db.String(100))
     employee_count = db.Column(db.Integer)
     annual_revenue_range = db.Column(db.String(100))  # e.g. '0-50M', '50M-200M'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     audits = db.relationship('Audit', backref='company', lazy=True, cascade='all, delete-orphan')
 
@@ -69,7 +69,7 @@ class Audit(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id', ondelete='CASCADE'), nullable=False)
     auditor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    audit_date = db.Column(db.DateTime, default=datetime.utcnow)
+    audit_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(20), default='draft')  # 'draft', 'in_progress', 'completed', 'delivered'
     risk_score = db.Column(db.Float, default=0.0)
     risk_level = db.Column(db.String(20), default='Low')  # 'Low', 'Medium', 'High', 'Critical'
@@ -78,7 +78,8 @@ class Audit(db.Model):
     action_plan_30 = db.Column(db.Text)
     action_plan_60 = db.Column(db.Text)
     action_plan_90 = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    conclusion = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     checklist_responses = db.relationship('ChecklistResponse', backref='audit', lazy=True, cascade='all, delete-orphan')
     findings = db.relationship('Finding', backref='audit', lazy=True, cascade='all, delete-orphan')
@@ -108,7 +109,7 @@ class ChecklistResponse(db.Model):
     question_key = db.Column(db.String(100), nullable=False)
     response = db.Column(db.String(10), default='NA')  # 'YES', 'NO', 'NA'
     observations = db.Column(db.Text)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -135,7 +136,7 @@ class Finding(db.Model):
     risk_level = db.Column(db.String(20), default='Medium')  # 'Low', 'Medium', 'High', 'Critical'
     recommendation = db.Column(db.Text)
     status = db.Column(db.String(20), default='open')  # 'open', 'resolved'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     evidences = db.relationship('Evidence', backref='finding', lazy=True)
 
@@ -164,7 +165,7 @@ class Evidence(db.Model):
     file_name = db.Column(db.String(255), nullable=False)
     file_type = db.Column(db.String(50), nullable=False)  # e.g., 'png', 'jpg', 'pdf', 'docx'
     file_path = db.Column(db.String(500), nullable=False)  # local path or URL
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -189,7 +190,7 @@ class Asset(db.Model):
     operating_system = db.Column(db.String(100))
     version = db.Column(db.String(50))
     observations = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {

@@ -1,31 +1,32 @@
-import os
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import request, redirect, url_for, g, current_app, make_response
 from models import User
 
-SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('JWT_SECRET')
-if not SECRET_KEY:
-    if os.getenv('FLASK_ENV') == 'production':
-        raise RuntimeError('SECRET_KEY or JWT_SECRET must be configured in production')
-    SECRET_KEY = 'dev-only-change-me'
+
+def _get_secret_key():
+    """Resuelve SECRET_KEY desde el contexto de la app en runtime.
+    Evita depender del orden de importación respecto a load_dotenv().
+    """
+    return current_app.config['SECRET_KEY']
 
 def encode_token(user_id, role):
     try:
+        now = datetime.utcnow()
         payload = {
-            'exp': datetime.utcnow() + timedelta(days=1),  # Token valid for 24h
-            'iat': datetime.utcnow(),
+            'exp': now + timedelta(days=1),  # Token válido 24h
+            'iat': now,
             'sub': user_id,
             'role': role
         }
-        return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-    except Exception as e:
+        return jwt.encode(payload, _get_secret_key(), algorithm='HS256')
+    except Exception:
         return None
 
 def decode_token(token):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        payload = jwt.decode(token, _get_secret_key(), algorithms=['HS256'])
         return payload
     except jwt.ExpiredSignatureError:
         return 'Signature expired. Please log in again.'
