@@ -153,6 +153,7 @@
                 <div class="card card-premium p-4">
                     <h5 class="text-white fw-bold mb-3">Registrar Activo</h5>
                     <form action="{{ url_for('audit_assets', audit_id=audit.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="asset_type" class="form-label text-secondary small fw-medium">Tipo de Activo *</label>
                             <select class="form-select form-control-premium" id="asset_type" name="asset_type" required>
@@ -227,6 +228,7 @@
                                     <td class="text-secondary">{{ asset.observations or '-' }}</td>
                                     <td class="text-center">
                                         <form action="{{ url_for('delete_asset', audit_id=audit.id, asset_id=asset.id) }}" method="POST" onsubmit="return confirm('¿Está seguro de remover este activo del inventario?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-outline-danger btn-sm px-1.5 py-0.5"><i class="fa-solid fa-trash"></i></button>
                                         </form>
                                     </td>
@@ -252,6 +254,7 @@
                 <div class="card card-premium p-4">
                     <h5 class="text-white fw-bold mb-3">Registrar Hallazgo / Brecha</h5>
                     <form action="{{ url_for('audit_findings', audit_id=audit.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="category" class="form-label text-secondary small fw-medium">Categoría *</label>
                             <select class="form-select form-control-premium" id="category" name="category" required>
@@ -318,6 +321,7 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge badge-risk-{{ f.risk_level.lower() }}">{{ f.risk_level }}</span>
                                     <form action="{{ url_for('delete_finding', audit_id=audit.id, finding_id=f.id) }}" method="POST" onsubmit="return confirm('¿Eliminar este hallazgo?')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-outline-danger btn-sm py-0.5 px-1.5"><i class="fa-solid fa-trash" style="font-size: 0.75rem;"></i></button>
                                     </form>
                                 </div>
@@ -344,6 +348,7 @@
                 <div class="card card-premium p-4">
                     <h5 class="text-white fw-bold mb-3">Subir Evidencia</h5>
                     <form action="{{ url_for('upload_evidence', audit_id=audit.id) }}" method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="file" class="form-label text-secondary small fw-medium">Archivo *</label>
                             <input class="form-control form-control-premium" type="file" id="file" name="file" required>
@@ -448,6 +453,11 @@
                             <textarea class="form-control form-control-premium" id="action_plan_90" rows="3" placeholder="Capacitaciones, simulacros y políticas organizacionales...">{{ audit.action_plan_90 or '' }}</textarea>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="conclusion" class="form-label text-secondary small fw-medium">6. Conclusión y Cierre (aparece en el PDF)</label>
+                            <textarea class="form-control form-control-premium" id="conclusion" rows="3" placeholder="Mensaje de cierre sobre resiliencia y próximos pasos para el cliente...">{{ audit.conclusion or '' }}</textarea>
+                        </div>
+
                         <button type="button" class="btn btn-premium-primary px-4 py-2 mt-2" onclick="saveAIInsights()">
                             <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cambios
                         </button>
@@ -460,7 +470,7 @@
                 <div class="card card-premium p-4 text-center h-100 d-flex flex-column justify-content-center align-items-center">
                     <i class="fa-solid fa-file-pdf fs-1 text-danger mb-3 opacity-60"></i>
                     <h4 class="text-white fw-bold">Reporte PDF Corporativo</h4>
-                    <p class="text-secondary small px-3">Genere el reporte ejecutivo automatizado en formato PDF para entregar al cliente. Contiene portada, gráficos de riesgo y plan de acción de 30/60/90 días.</p>
+                    <p class="text-secondary small px-3">Genere el diagnóstico en PDF para entregar al cliente. Incluye KPIs de riesgo, brechas de control, hallazgos, plan 30/60/90, conclusión y propuesta Sabuesos.</p>
                     
                     <a href="{{ url_for('download_report', audit_id=audit.id) }}" class="btn btn-danger btn-lg px-4 mt-3" style="background-color: #ef4444; border-color: #ef4444;">
                         <i class="fa-solid fa-download me-2"></i> Descargar Informe PDF
@@ -501,6 +511,9 @@
         });
     });
 
+    // Token CSRF para llamadas AJAX
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
     // Cambiar estado de la auditoría
     function updateAuditStatus(status) {
         showSaveIndicator(true);
@@ -509,6 +522,7 @@
         
         fetch("{{ url_for('update_audit_status', audit_id=audit.id) }}", {
             method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN },
             body: formData
         })
         .then(res => res.json())
@@ -563,7 +577,8 @@
         fetch("{{ url_for('save_checklist', audit_id=audit.id) }}", {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
             },
             body: JSON.stringify({ responses: responses })
         })
@@ -611,7 +626,8 @@
         form.classList.add('d-none');
         
         fetch("{{ url_for('generate_ai', audit_id=audit.id) }}", {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN }
         })
         .then(res => res.json())
         .then(data => {
@@ -626,6 +642,9 @@
                 document.getElementById('action_plan_30').value = data.insights.action_plan_30;
                 document.getElementById('action_plan_60').value = data.insights.action_plan_60;
                 document.getElementById('action_plan_90').value = data.insights.action_plan_90;
+                if (data.insights.conclusion) {
+                    document.getElementById('conclusion').value = data.insights.conclusion;
+                }
                 
                 alert("¡Insights de IA generados correctamente! Por favor, revíselos y guarde los cambios.");
             } else {
@@ -650,13 +669,15 @@
             recommendations_ai: document.getElementById('recommendations_ai').value,
             action_plan_30: document.getElementById('action_plan_30').value,
             action_plan_60: document.getElementById('action_plan_60').value,
-            action_plan_90: document.getElementById('action_plan_90').value
+            action_plan_90: document.getElementById('action_plan_90').value,
+            conclusion: document.getElementById('conclusion').value
         };
         
         fetch("{{ url_for('save_ai_insights', audit_id=audit.id) }}", {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
             },
             body: JSON.stringify(payload)
         })

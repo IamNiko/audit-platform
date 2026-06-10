@@ -2,8 +2,9 @@ module.exports = {
   apps: [
     {
       name: 'minihack-audit-api',
-      script: 'app.py',
-      interpreter: './venv/bin/python',
+      script: './venv/bin/gunicorn',
+      args: '--workers 2 --threads 4 --timeout 120 --bind 127.0.0.1:5005 app:app',
+      interpreter: 'none',
       instances: 1,
       exec_mode: 'fork',
       watch: false,

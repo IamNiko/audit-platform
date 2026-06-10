@@ -15,6 +15,7 @@
             <h4 class="text-white mb-4 fw-semibold text-center">Acceso Consultores</h4>
             
             <form action="{{ url_for('login') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <label for="username" class="form-label text-secondary small fw-medium">Usuario / Email</label>
                     <div class="input-group">

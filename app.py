@@ -6,7 +6,11 @@ load_dotenv()
 
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, g, make_response, send_file, abort
 from werkzeug.utils import secure_filename
-from database import db
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from database import db, configure_database
 from models import User, Company, Audit, ChecklistResponse, Finding, Asset, Evidence
 from auth import encode_token, decode_token, login_required, role_required
 from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
@@ -23,13 +27,7 @@ if not secret_key:
         raise RuntimeError('SECRET_KEY or JWT_SECRET must be configured in production')
     secret_key = 'dev-only-change-me'
 app.config['SECRET_KEY'] = secret_key
-db_url = os.getenv('DATABASE_URL') or 'sqlite:///audit.db'
-if db_url.startswith('postgres://'):
-    db_url = db_url.replace('postgres://', 'postgresql+pg8000://', 1)
-elif db_url.startswith('postgresql://'):
-    db_url = db_url.replace('postgresql://', 'postgresql+pg8000://', 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+configure_database(app)
 
 # Carpeta de subida de evidencias
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static/uploads')
@@ -38,7 +36,28 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Máximo 16MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
 
-db.init_app(app)
+# Detrás de Nginx: respetar IP real del cliente para rate limiting
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+# Rate limiting (en memoria; suficiente para una instancia)
+# Debe inicializarse antes que CSRF para que cuente requests aunque fallen el token
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri='memory://'
+)
+
+# Protección CSRF (formularios y AJAX vía header X-CSRFToken)
+app.config['WTF_CSRF_TIME_LIMIT'] = None  # válido mientras dure la sesión
+csrf = CSRFProtect(app)
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    if request.accept_mimetypes.best == 'application/json' or request.is_json:
+        return jsonify({'status': 'error', 'message': 'Sesión inválida o expirada. Recargue la página.'}), 400
+    flash('La sesión expiró o el formulario es inválido. Intente nuevamente.', 'error')
+    return redirect(request.referrer or url_for('login'))
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -72,6 +91,7 @@ def load_logged_in_user():
 # ----------------- RUTAS DE AUTENTICACION -----------------
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute; 30 per hour', methods=['POST'])
 def login():
     if g.current_user:
         return redirect(url_for('dashboard'))
@@ -120,8 +140,18 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    total_audits = Audit.query.count()
-    total_companies = Company.query.count()
+    from sqlalchemy import func
+
+    # RBAC: superadmin ve métricas globales, auditor solo de sus auditorías
+    is_superadmin = g.current_user.role == 'superadmin'
+    audit_filter = [] if is_superadmin else [Audit.auditor_id == g.current_user.id]
+
+    total_audits = Audit.query.filter(*audit_filter).count()
+    if is_superadmin:
+        total_companies = Company.query.count()
+    else:
+        total_companies = db.session.query(func.count(func.distinct(Audit.company_id)))\
+            .filter(*audit_filter).scalar() or 0
     
     # Inicializar estadísticas
     no_mfa_pct = 0.0
@@ -132,32 +162,35 @@ def dashboard():
     top_findings = []
     
     if total_audits > 0:
+        def count_no_responses(question_key):
+            q = ChecklistResponse.query.join(Audit).filter(
+                ChecklistResponse.question_key == question_key,
+                ChecklistResponse.response == 'NO',
+                *audit_filter
+            )
+            return q.count()
+
         # Pct sin MFA (Key: mfa_users)
-        no_mfa = ChecklistResponse.query.filter_by(question_key='mfa_users', response='NO').count()
-        no_mfa_pct = round((no_mfa / total_audits) * 100, 1)
+        no_mfa_pct = round((count_no_responses('mfa_users') / total_audits) * 100, 1)
         
         # Pct sin Backups (Key: backup_frequency)
-        no_backups = ChecklistResponse.query.filter_by(question_key='backup_frequency', response='NO').count()
-        no_backups_pct = round((no_backups / total_audits) * 100, 1)
+        no_backups_pct = round((count_no_responses('backup_frequency') / total_audits) * 100, 1)
         
         # Pct Acceso Remoto Inseguro (RDP expuesto) (Key: remote_rdp)
-        insecure_remote = ChecklistResponse.query.filter_by(question_key='remote_rdp', response='NO').count()
-        insecure_remote_pct = round((insecure_remote / total_audits) * 100, 1)
+        insecure_remote_pct = round((count_no_responses('remote_rdp') / total_audits) * 100, 1)
         
         # Promedio de riesgo por industria
-        # Query: AVG(audit.risk_score) agrupado por company.industry
-        from sqlalchemy import func
         industry_scores = db.session.query(
             Company.industry, 
             func.avg(Audit.risk_score)
-        ).join(Audit).group_by(Company.industry).all()
+        ).join(Audit).filter(*audit_filter).group_by(Company.industry).all()
         industry_stats = {ind: round(score, 1) for ind, score in industry_scores if ind}
         
         # Promedio de riesgo por tamaño (revenue range)
         size_scores = db.session.query(
             Company.annual_revenue_range,
             func.avg(Audit.risk_score)
-        ).join(Audit).group_by(Company.annual_revenue_range).all()
+        ).join(Audit).filter(*audit_filter).group_by(Company.annual_revenue_range).all()
         size_stats = {sz: round(score, 1) for sz, score in size_scores if sz}
         
         # Top 10 Hallazgos Frecuentes
@@ -165,10 +198,12 @@ def dashboard():
             Finding.title,
             Finding.category,
             func.count(Finding.id)
-        ).group_by(Finding.title, Finding.category).order_by(func.count(Finding.id).desc()).limit(10).all()
+        ).join(Audit, Finding.audit_id == Audit.id).filter(*audit_filter)\
+            .group_by(Finding.title, Finding.category)\
+            .order_by(func.count(Finding.id).desc()).limit(10).all()
         top_findings = [{'title': title, 'category': cat, 'count': count} for title, cat, count in top_f_query]
         
-    recent_audits = Audit.query.order_by(Audit.created_at.desc()).limit(5).all()
+    recent_audits = Audit.query.filter(*audit_filter).order_by(Audit.created_at.desc()).limit(5).all()
     
     return render_template(
         'dashboard.html',
@@ -234,7 +269,10 @@ def create_company():
 @login_required
 def detail_company(company_id):
     company = Company.query.get_or_404(company_id)
-    audits = Audit.query.filter_by(company_id=company_id).order_by(Audit.audit_date.desc()).all()
+    audits_query = Audit.query.filter_by(company_id=company_id)
+    if g.current_user.role != 'superadmin':
+        audits_query = audits_query.filter_by(auditor_id=g.current_user.id)
+    audits = audits_query.order_by(Audit.audit_date.desc()).all()
     return render_template('companies/detail.html', company=company, audits=audits)
 
 @app.route('/companies/<int:company_id>/edit', methods=['GET', 'POST'])
@@ -584,6 +622,7 @@ def save_ai_insights(audit_id):
     audit.action_plan_30 = data.get('action_plan_30')
     audit.action_plan_60 = data.get('action_plan_60')
     audit.action_plan_90 = data.get('action_plan_90')
+    audit.conclusion = data.get('conclusion')
     
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'Insights guardados correctamente.'})

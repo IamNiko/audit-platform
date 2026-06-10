@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Audit Platform - The Mini Hack{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Audit — Diagnóstico de Ciberseguridad{% endblock %}</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,8 +29,8 @@
                         <div class="d-flex align-items-center px-3 mb-4 gap-2">
                             <i class="fa-solid fa-shield-halved fs-3" style="color: var(--primary-green);"></i>
                             <div>
-                                <h6 class="mb-0 fw-bold text-white">THE MINI HACK</h6>
-                                <small class="text-secondary" style="font-size: 0.75rem;">Audit & Compliance</small>
+                                <h6 class="mb-0 fw-bold text-white">AUDIT</h6>
+                                <small class="text-secondary" style="font-size: 0.75rem;">Diagnóstico de Ciberseguridad</small>
                             </div>
                         </div>
                         
@@ -81,7 +82,7 @@
                 <div class="d-md-none d-flex justify-content-between align-items-center mb-4 bg-dark-blue p-3 rounded border border-secondary" style="background-color: var(--bg-card); border-color: var(--border-color);">
                     <div class="d-flex align-items-center gap-2">
                         <i class="fa-solid fa-shield-halved" style="color: var(--primary-green);"></i>
-                        <span class="fw-bold text-white mb-0" style="font-size: 0.95rem;">THE MINI HACK</span>
+                        <span class="fw-bold text-white mb-0" style="font-size: 0.95rem;">AUDIT</span>
                     </div>
                     <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
                         <i class="fa-solid fa-bars"></i>
