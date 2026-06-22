@@ -458,12 +458,6 @@
                             <textarea class="form-control form-control-premium" id="conclusion" rows="3" placeholder="Mensaje de cierre sobre resiliencia y próximos pasos para el cliente...">{{ audit.conclusion or '' }}</textarea>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="scan_domain" class="form-label text-secondary small fw-medium">7. Dominio escaneo gratuito (anexo PDF)</label>
-                            <input type="text" class="form-control form-control-premium" id="scan_domain" placeholder="ej. calzavara.ar o www.calzavara.ar" value="{{ audit.scan_domain or '' }}">
-                            <div class="form-text text-secondary">Si el cliente hizo el escaneo en TheMiniHack, ingrese el dominio. Al descargar el PDF se anexará el informe externo automáticamente.</div>
-                        </div>
-
                         <button type="button" class="btn btn-premium-primary px-4 py-2 mt-2" onclick="saveAIInsights()">
                             <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cambios
                         </button>
@@ -476,7 +470,7 @@
                 <div class="card card-premium p-4 text-center h-100 d-flex flex-column justify-content-center align-items-center">
                     <i class="fa-solid fa-file-pdf fs-1 text-danger mb-3 opacity-60"></i>
                     <h4 class="text-white fw-bold">Reporte PDF Corporativo</h4>
-                    <p class="text-secondary small px-3">Genere el diagnóstico en PDF para entregar al cliente. Incluye KPIs, hallazgos, plan 30/60/90, conclusión, propuesta Sabuesos y —si configuró el dominio— el escaneo gratuito TheMiniHack como anexo técnico.</p>
+                    <p class="text-secondary small px-3">Genere el diagnóstico en PDF para entregar al cliente. Incluye KPIs de riesgo, brechas de control, hallazgos, plan 30/60/90, conclusión y propuesta Sabuesos.</p>
                     
                     <a href="{{ url_for('download_report', audit_id=audit.id) }}" class="btn btn-danger btn-lg px-4 mt-3" style="background-color: #ef4444; border-color: #ef4444;">
                         <i class="fa-solid fa-download me-2"></i> Descargar Informe PDF
@@ -676,8 +670,7 @@
             action_plan_30: document.getElementById('action_plan_30').value,
             action_plan_60: document.getElementById('action_plan_60').value,
             action_plan_90: document.getElementById('action_plan_90').value,
-            conclusion: document.getElementById('conclusion').value,
-            scan_domain: document.getElementById('scan_domain').value
+            conclusion: document.getElementById('conclusion').value
         };
         
         fetch("{{ url_for('save_ai_insights', audit_id=audit.id) }}", {

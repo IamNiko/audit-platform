@@ -86,7 +86,6 @@ class Audit(db.Model):
     action_plan_60 = db.Column(db.Text)
     action_plan_90 = db.Column(db.Text)
     conclusion = db.Column(db.Text)
-    scan_domain = db.Column(db.String(255))  # Dominio del escaneo gratuito TheMiniHack (anexo)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     checklist_responses = db.relationship('ChecklistResponse', backref='audit', lazy=True, cascade='all, delete-orphan')
@@ -104,7 +103,6 @@ class Audit(db.Model):
             'risk_score': self.risk_score,
             'risk_level': self.risk_level,
             'executive_summary': self.executive_summary,
-            'scan_domain': self.scan_domain,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
