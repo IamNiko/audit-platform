@@ -21,6 +21,7 @@ from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
 from services.risk_engine import calculate_audit_risk, calculate_finding_risk
 from services.ai_service import generate_audit_ai_insights
 from services.pdf_generator import build_pdf_report
+from services.minihack_annex import find_free_scan_pdf, merge_pdfs
 
 app = Flask(__name__)
 
@@ -671,6 +672,8 @@ def save_ai_insights(audit_id):
     audit.action_plan_60 = data.get('action_plan_60')
     audit.action_plan_90 = data.get('action_plan_90')
     audit.conclusion = data.get('conclusion')
+    scan_domain = (data.get('scan_domain') or '').strip()
+    audit.scan_domain = scan_domain or None
     
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'Insights guardados correctamente.'})

@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from weasyprint import HTML
 from models import Audit, Finding, ChecklistResponse, Asset, Evidence
 from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
+from services.minihack_annex import find_free_scan_pdf, merge_pdfs
 
 RISK_LABELS = {
     'Low': 'Bajo',
@@ -191,4 +192,14 @@ def build_pdf_report(audit_id):
     pdf_path = os.path.join(reports_dir, pdf_filename)
 
     HTML(string=rendered_html).write_pdf(pdf_path)
+
+    scan_domain = getattr(audit, 'scan_domain', None)
+    if scan_domain:
+        annex = find_free_scan_pdf(scan_domain)
+        if annex and annex.get('pdf_path'):
+            merged_filename = pdf_filename.replace('.pdf', '_con_anexo_escaneo.pdf')
+            merged_path = os.path.join(reports_dir, merged_filename)
+            merge_pdfs(pdf_path, annex['pdf_path'], merged_path)
+            return merged_path
+
     return pdf_path
