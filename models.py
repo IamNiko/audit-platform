@@ -74,8 +74,8 @@ class Audit(db.Model):
     __tablename__ = 'audits'
     
     id = db.Column(db.Integer, primary_key=True)
-    company_id = db.Column(db.Integer, db.ForeignKey('companies.id', ondelete='CASCADE'), nullable=False)
-    auditor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id', ondelete='CASCADE'), nullable=False, index=True)
+    auditor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     audit_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(20), default='draft')  # 'draft', 'in_progress', 'completed', 'delivered'
     risk_score = db.Column(db.Float, default=0.0)
@@ -111,9 +111,9 @@ class ChecklistResponse(db.Model):
     __tablename__ = 'checklist_responses'
     
     id = db.Column(db.Integer, primary_key=True)
-    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False, index=True)
     category = db.Column(db.String(80), nullable=False)
-    question_key = db.Column(db.String(100), nullable=False)
+    question_key = db.Column(db.String(100), nullable=False, index=True)
     response = db.Column(db.String(10), default='NA')  # 'YES', 'NO', 'NA'
     observations = db.Column(db.Text)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -134,7 +134,7 @@ class Finding(db.Model):
     __tablename__ = 'findings'
     
     id = db.Column(db.Integer, primary_key=True)
-    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False, index=True)
     category = db.Column(db.String(80), nullable=False)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
@@ -167,8 +167,8 @@ class Evidence(db.Model):
     __tablename__ = 'evidences'
     
     id = db.Column(db.Integer, primary_key=True)
-    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False)
-    finding_id = db.Column(db.Integer, db.ForeignKey('findings.id', ondelete='SET NULL'), nullable=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False, index=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey('findings.id', ondelete='SET NULL'), nullable=True, index=True)
     file_name = db.Column(db.String(255), nullable=False)
     file_type = db.Column(db.String(50), nullable=False)  # e.g., 'png', 'jpg', 'pdf', 'docx'
     file_path = db.Column(db.String(500), nullable=False)  # local path or URL
@@ -190,7 +190,7 @@ class Asset(db.Model):
     __tablename__ = 'assets'
     
     id = db.Column(db.Integer, primary_key=True)
-    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id', ondelete='CASCADE'), nullable=False, index=True)
     asset_type = db.Column(db.String(50), nullable=False)  # 'PC', 'Notebook', 'Server', 'Router', etc.
     brand = db.Column(db.String(100))
     model = db.Column(db.String(100))

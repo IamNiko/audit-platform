@@ -12,15 +12,30 @@ def _get_secret_key():
     return current_app.config['SECRET_KEY']
 
 
+# Duración del claim 'exp' del JWT por estado del flujo de auth.
+# Debe reflejar el max_age real de la cookie que se setea en app.py:
+# 3600s (1h) para estados parciales, 86400s (24h) para 'authenticated'.
+# Antes 'exp' era siempre +1 día, así que un token parcial robado seguía
+# siendo válido server-side 24h aunque el navegador ya hubiese descartado
+# la cookie a la hora.
+TOKEN_DURATIONS = {
+    'change_password': timedelta(hours=1),
+    '2fa_setup': timedelta(hours=1),
+    '2fa_verify': timedelta(hours=1),
+    'authenticated': timedelta(hours=24),
+}
+
+
 def encode_token(user_id, role, state='authenticated'):
     """
     state puede ser: 'change_password', '2fa_setup', '2fa_verify', 'authenticated'
-    Los tokens parciales tienen max_age de 1 hora; los completos, 24h.
+    Los tokens parciales expiran en 1 hora; los completos, en 24h.
     """
     try:
         now = datetime.utcnow()
+        duration = TOKEN_DURATIONS.get(state, timedelta(hours=1))
         payload = {
-            'exp': now + timedelta(days=1),
+            'exp': now + duration,
             'iat': now,
             'sub': user_id,
             'role': role,

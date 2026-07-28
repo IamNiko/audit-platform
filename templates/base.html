@@ -75,9 +75,12 @@
                                 <span class="badge bg-primary text-capitalize" style="font-size: 0.65rem;">{{ g.current_user.role }}</span>
                             </div>
                         </div>
-                        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger w-100 btn-sm">
-                            <i class="fa-solid fa-arrow-right-from-bracket me-2"></i> Cerrar Sesión
-                        </a>
+                        <form method="POST" action="{{ url_for('logout') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
+                                <i class="fa-solid fa-arrow-right-from-bracket me-2"></i> Cerrar Sesión
+                            </button>
+                        </form>
                     </div>
                 </div>
             </nav>

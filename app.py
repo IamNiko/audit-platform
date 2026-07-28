@@ -11,9 +11,11 @@ load_dotenv()
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, g, make_response, send_file, abort
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from sqlalchemy.exc import IntegrityError
 from database import db, configure_database
 from models import User, Company, Audit, ChecklistResponse, Finding, Asset, Evidence
 from auth import encode_token, decode_token, login_required, role_required, partial_token_required
@@ -39,6 +41,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Máximo 16MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
+
+# Hash "señuelo" para que /login tarde lo mismo con usuario inexistente que con
+# password incorrecta (evita enumeración de usuarios por timing).
+_DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 # Detrás de Nginx: respetar IP real del cliente para rate limiting
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -85,10 +91,42 @@ def validate_password_strength(password):
         errors.append('Al menos un número.')
     if not re.search(r'[!@#$%^&*()\-_=+\[\]{};:\'",.\<>/?\\|`~]', password):
         errors.append('Al menos un carácter especial (!@#$%...).')
+    if len(password) > 128:
+        errors.append('Máximo 128 caracteres.')
     return errors
+
+def parse_employee_count(value):
+    """Retorna (cantidad, None) si es válido, o (None, mensaje_de_error)."""
+    if value is None or value == '':
+        return 0, None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None, 'Cantidad de empleados inválida: debe ser un número entero.'
+    if count < 0:
+        return None, 'Cantidad de empleados inválida: no puede ser negativa.'
+    return count, None
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Firmas binarias (magic bytes) esperadas por extensión. Evita que un archivo
+# renombrado (ej. algo.exe -> algo.pdf) pase el filtro que solo mira la extensión.
+FILE_SIGNATURES = {
+    'png': (b'\x89PNG\r\n\x1a\n',),
+    'jpg': (b'\xff\xd8\xff',),
+    'jpeg': (b'\xff\xd8\xff',),
+    'pdf': (b'%PDF-',),
+    'docx': (b'PK\x03\x04',),  # DOCX es un ZIP; alcanza para descartar contenido no-office
+}
+
+def file_content_matches_extension(file_storage, ext):
+    signatures = FILE_SIGNATURES.get(ext)
+    if not signatures:
+        return False
+    header = file_storage.stream.read(8)
+    file_storage.stream.seek(0)
+    return any(header.startswith(sig) for sig in signatures)
 
 def current_user_can_access_audit(audit):
     if not g.current_user:
@@ -138,7 +176,15 @@ def login():
         if not user:
             user = User.query.filter_by(email=username).first()
 
-        if not user or not user.check_password(password):
+        if user:
+            password_ok = user.check_password(password)
+        else:
+            # Corre un chequeo de hash igual de costoso contra un valor señuelo
+            # para no filtrar por timing si el usuario existe o no.
+            check_password_hash(_DUMMY_PASSWORD_HASH, password)
+            password_ok = False
+
+        if not user or not password_ok:
             flash('Credenciales incorrectas.', 'error')
             return render_template('login.html')
 
@@ -175,7 +221,7 @@ def login():
 
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 def logout():
     resp = make_response(redirect(url_for('login')))
     resp.delete_cookie('token')
@@ -287,13 +333,18 @@ def create_company():
         industry = request.form.get('industry')
         employee_count = request.form.get('employee_count')
         revenue = request.form.get('annual_revenue_range')
-        
+
+        employee_count_val, employee_count_error = parse_employee_count(employee_count)
+        if employee_count_error:
+            flash(employee_count_error, 'error')
+            return render_template('companies/create.html')
+
         # Validar duplicados de tax_id (CUIT)
         existing = Company.query.filter_by(tax_id=tax_id).first()
         if existing:
             flash(f'Ya existe un cliente registrado con el CUIT/ID {tax_id}.', 'error')
             return render_template('companies/create.html')
-            
+
         company = Company(
             company_name=name,
             tax_id=tax_id,
@@ -302,12 +353,18 @@ def create_company():
             province=province,
             country=country,
             industry=industry,
-            employee_count=int(employee_count) if employee_count else 0,
+            employee_count=employee_count_val,
             annual_revenue_range=revenue
         )
         db.session.add(company)
-        db.session.commit()
-        
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Alta concurrente con el mismo CUIT entre el chequeo y el commit
+            db.session.rollback()
+            flash(f'Ya existe un cliente registrado con el CUIT/ID {tax_id}.', 'error')
+            return render_template('companies/create.html')
+
         flash('Cliente registrado con éxito.', 'success')
         return redirect(url_for('list_companies'))
         
@@ -335,12 +392,23 @@ def edit_company(company_id):
         company.province = request.form.get('province')
         company.country = request.form.get('country')
         company.industry = request.form.get('industry')
-        
+
         employee_count = request.form.get('employee_count')
-        company.employee_count = int(employee_count) if employee_count else 0
+        employee_count_val, employee_count_error = parse_employee_count(employee_count)
+        if employee_count_error:
+            db.session.rollback()
+            flash(employee_count_error, 'error')
+            return render_template('companies/edit.html', company=company)
+        company.employee_count = employee_count_val
         company.annual_revenue_range = request.form.get('annual_revenue_range')
-        
-        db.session.commit()
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash(f'Ya existe otro cliente registrado con el CUIT/ID {company.tax_id}.', 'error')
+            return render_template('companies/edit.html', company=company)
+
         flash('Datos del cliente actualizados.', 'success')
         return redirect(url_for('detail_company', company_id=company.id))
         
@@ -591,8 +659,13 @@ def upload_evidence(audit_id):
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
         
     if file and allowed_file(file.filename):
-        # Asegurar nombre de archivo limpio y único
         ext = file.filename.rsplit('.', 1)[1].lower()
+
+        if not file_content_matches_extension(file, ext):
+            flash('El contenido del archivo no coincide con la extensión declarada.', 'error')
+            return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
+
+        # Asegurar nombre de archivo limpio y único
         import uuid
         unique_name = f"evidence_{audit_id}_{uuid.uuid4().hex[:10]}.{ext}"
         safe_file_name = secure_filename(file.filename) or unique_name
@@ -639,6 +712,7 @@ def download_evidence(audit_id, evidence_id):
 
 # IA (Módulo 10)
 @app.route('/audits/<int:audit_id>/ai/generate', methods=['POST'])
+@limiter.limit('10 per minute; 40 per hour')
 @login_required
 def generate_ai(audit_id):
     audit = get_authorized_audit_or_404(audit_id)
@@ -863,12 +937,10 @@ def admin_create_user():
         db.session.add(user)
         db.session.commit()
 
-        flash(
-            f'Usuario "{username}" creado. Contraseña temporal: {temp_password} — '
-            f'Compartila de forma segura. No se mostrará nuevamente.',
-            'warning'
-        )
-        return redirect(url_for('admin_users'))
+        # La contraseña temporal se renderiza directo en la respuesta (no vía
+        # flash/sesión) para no dejarla dando vueltas en la cookie de sesión.
+        return render_template('admin/users/temp_password.html',
+                                user=user, temp_password=temp_password, action='creado')
 
     return render_template('admin/users/create.html')
 
@@ -900,12 +972,8 @@ def admin_reset_password(user_id):
     user.set_password(temp_password)
     user.must_change_password = True
     db.session.commit()
-    flash(
-        f'Contraseña de "{user.username}" reseteada. Temporal: {temp_password} — '
-        f'Compartila de forma segura. No se volverá a mostrar.',
-        'warning'
-    )
-    return redirect(url_for('admin_users'))
+    return render_template('admin/users/temp_password.html',
+                            user=user, temp_password=temp_password, action='reseteado')
 
 
 @app.route('/admin/users/<int:user_id>/reset-2fa', methods=['POST'])
