@@ -5,6 +5,7 @@ import re
 import io
 import base64
 import secrets
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -20,7 +21,7 @@ from database import db, configure_database
 from models import User, Company, Audit, ChecklistResponse, Finding, Asset, Evidence
 from auth import encode_token, decode_token, login_required, role_required, partial_token_required
 from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
-from services.risk_engine import calculate_audit_risk, calculate_finding_risk
+from services.risk_engine import calculate_audit_risk, calculate_finding_risk, REMEDIATION_SLA
 from services.ai_service import generate_audit_ai_insights
 from services.pdf_generator import build_pdf_report
 
@@ -140,6 +141,21 @@ def get_authorized_audit_or_404(audit_id):
     if not current_user_can_access_audit(audit):
         abort(403)
     return audit
+
+def invalidate_report_approval(audit):
+    """
+    Devuelve el informe a borrador cuando cambia el contenido sobre el que se aprobó.
+
+    Una aprobación firmada vale para un contenido concreto: si después se edita el
+    checklist, un hallazgo o el texto del informe, lo aprobado ya no es lo que el PDF
+    va a decir. No hace commit: lo hace el llamador junto con su propio cambio.
+    """
+    if audit.report_status != 'approved':
+        return False
+    audit.report_status = 'draft'
+    audit.approved_by_id = None
+    audit.approved_at = None
+    return True
 
 # Hook para inyectar el usuario logueado en las plantillas
 @app.before_request
@@ -501,7 +517,8 @@ def audit_workspace(audit_id):
         checklist=checklist_data,
         assets=assets,
         findings=findings,
-        evidences=evidences
+        evidences=evidences,
+        remediation_sla=REMEDIATION_SLA
     )
 
 # Actualizar Estado (Módulo 2)
@@ -535,23 +552,25 @@ def save_checklist(audit_id):
         if db_resp:
             db_resp.response = response_val
             db_resp.observations = obs
-            
+
+    reopened = invalidate_report_approval(audit)
     db.session.commit()
-    
+
     # Recalcular riesgo de la auditoría tras cambio en checklist
     score, level = calculate_audit_risk(audit_id)
-    
+
     return jsonify({
-        'status': 'success', 
-        'risk_score': score, 
-        'risk_level': level
+        'status': 'success',
+        'risk_score': score,
+        'risk_level': level,
+        'report_reopened': reopened
     })
 
 # CRUD Inventario por AJAX (Módulo 4)
 @app.route('/audits/<int:audit_id>/assets', methods=['GET', 'POST'])
 @login_required
 def audit_assets(audit_id):
-    get_authorized_audit_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     if request.method == 'POST':
         # Agregar activo
         asset_type = request.form.get('asset_type')
@@ -571,8 +590,9 @@ def audit_assets(audit_id):
             observations=observations
         )
         db.session.add(asset)
+        invalidate_report_approval(audit)
         db.session.commit()
-        
+
         flash('Activo registrado en el inventario.', 'success')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#inventario')
         
@@ -582,9 +602,10 @@ def audit_assets(audit_id):
 @app.route('/audits/<int:audit_id>/assets/<int:asset_id>/delete', methods=['POST'])
 @login_required
 def delete_asset(audit_id, asset_id):
-    get_authorized_audit_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     asset = Asset.query.filter_by(audit_id=audit_id, id=asset_id).first_or_404()
     db.session.delete(asset)
+    invalidate_report_approval(audit)
     db.session.commit()
     flash('Activo removido del inventario.', 'success')
     return redirect(url_for('audit_workspace', audit_id=audit_id) + '#inventario')
@@ -593,7 +614,7 @@ def delete_asset(audit_id, asset_id):
 @app.route('/audits/<int:audit_id>/findings', methods=['GET', 'POST'])
 @login_required
 def audit_findings(audit_id):
-    get_authorized_audit_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     if request.method == 'POST':
         category = request.form.get('category')
         title = request.form.get('title')
@@ -601,10 +622,13 @@ def audit_findings(audit_id):
         impact = request.form.get('impact')
         probability = request.form.get('probability')
         recommendation = request.form.get('recommendation')
-        
+        affected_asset = request.form.get('affected_asset')
+        remediation_effort = request.form.get('remediation_effort') or 'Medium'
+        standard_references = request.form.get('standard_references')
+
         # Calcular riesgo individual
         score, risk_lvl = calculate_finding_risk(impact, probability)
-        
+
         finding = Finding(
             audit_id=audit_id,
             category=category,
@@ -614,14 +638,18 @@ def audit_findings(audit_id):
             probability=probability,
             risk_level=risk_lvl,
             recommendation=recommendation,
-            status='open'
+            status='open',
+            affected_asset=affected_asset,
+            remediation_effort=remediation_effort,
+            standard_references=standard_references
         )
         db.session.add(finding)
+        invalidate_report_approval(audit)
         db.session.commit()
-        
+
         # Recalcular riesgo de la auditoría global
         calculate_audit_risk(audit_id)
-        
+
         flash('Hallazgo registrado con éxito.', 'success')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#hallazgos')
         
@@ -631,14 +659,15 @@ def audit_findings(audit_id):
 @app.route('/audits/<int:audit_id>/findings/<int:finding_id>/delete', methods=['POST'])
 @login_required
 def delete_finding(audit_id, finding_id):
-    get_authorized_audit_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     finding = Finding.query.filter_by(audit_id=audit_id, id=finding_id).first_or_404()
     db.session.delete(finding)
+    invalidate_report_approval(audit)
     db.session.commit()
-    
+
     # Recalcular riesgo de la auditoría global
     calculate_audit_risk(audit_id)
-    
+
     flash('Hallazgo eliminado.', 'success')
     return redirect(url_for('audit_workspace', audit_id=audit_id) + '#hallazgos')
 
@@ -646,7 +675,7 @@ def delete_finding(audit_id, finding_id):
 @app.route('/audits/<int:audit_id>/evidence/upload', methods=['POST'])
 @login_required
 def upload_evidence(audit_id):
-    get_authorized_audit_or_404(audit_id)
+    audit = get_authorized_audit_or_404(audit_id)
     if 'file' not in request.files:
         flash('No se seleccionó archivo.', 'error')
         return redirect(url_for('audit_workspace', audit_id=audit_id) + '#evidencias')
@@ -689,8 +718,9 @@ def upload_evidence(audit_id):
             file_path=filepath
         )
         db.session.add(evidence)
+        invalidate_report_approval(audit)
         db.session.commit()
-        
+
         flash('Evidencia subida correctamente.', 'success')
     else:
         flash('Extensión de archivo no permitida (solo PNG, JPG, JPEG, PDF, DOCX).', 'error')
@@ -745,9 +775,57 @@ def save_ai_insights(audit_id):
     audit.action_plan_60 = data.get('action_plan_60')
     audit.action_plan_90 = data.get('action_plan_90')
     audit.conclusion = data.get('conclusion')
-    
+
+    reopened = invalidate_report_approval(audit)
     db.session.commit()
-    return jsonify({'status': 'success', 'message': 'Insights guardados correctamente.'})
+
+    message = 'Insights guardados correctamente.'
+    if reopened:
+        message += ' El informe volvió a estado borrador: hay que aprobarlo de nuevo.'
+    return jsonify({'status': 'success', 'message': message, 'report_reopened': reopened})
+
+# Aprobación del informe (SOP-008): la plataforma registra quién aprobó y cuándo.
+# La firma y el envío al cliente ocurren fuera de la plataforma, y la copia firmada
+# no se guarda acá.
+@app.route('/audits/<int:audit_id>/report/approve', methods=['POST'])
+@login_required
+def approve_report(audit_id):
+    audit = get_authorized_audit_or_404(audit_id)
+
+    if not audit.executive_summary or not audit.conclusion:
+        flash('No se puede aprobar un informe sin resumen ejecutivo y conclusión.', 'error')
+        return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
+
+    version = (request.form.get('report_version') or '').strip()
+    if version:
+        if not re.fullmatch(r'\d+\.\d+', version):
+            flash('La versión debe tener formato N.N (por ejemplo 1.0 o 1.1).', 'error')
+            return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
+        audit.report_version = version
+
+    audit.report_status = 'approved'
+    audit.approved_by_id = g.current_user.id
+    audit.approved_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    flash(
+        f'Informe v{audit.report_version} aprobado. Descargue el PDF final, fírmelo y '
+        'envíelo al cliente por el canal acordado.',
+        'success'
+    )
+    return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
+
+@app.route('/audits/<int:audit_id>/report/reopen', methods=['POST'])
+@login_required
+def reopen_report(audit_id):
+    audit = get_authorized_audit_or_404(audit_id)
+    audit.report_status = 'draft'
+    audit.approved_by_id = None
+    audit.approved_at = None
+    db.session.commit()
+
+    flash('El informe volvió a estado borrador.', 'success')
+    return redirect(url_for('audit_workspace', audit_id=audit_id) + '#reporte')
 
 # Informe PDF (Módulo 8)
 @app.route('/audits/<int:audit_id>/report')

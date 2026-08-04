@@ -61,7 +61,22 @@ def generate_audit_ai_insights(audit_id):
         {chr(10).join(active_findings) if active_findings else '  * Ninguno (No se registraron vulnerabilidades adicionales)'}
         
         Genera la siguiente información estructurada de manera extremadamente profesional, pragmática, sin tecnicismos excesivos y orientada a nivel ejecutivo.
-        
+
+        REGLAS DE REDACCIÓN (obligatorias):
+        1. Las respuestas del checklist son DECLARACIONES del cliente relevadas en la auditoría
+           presencial, no verificaciones técnicas. No afirmes que algo "se comprobó", "se detectó"
+           o "se verificó" salvo que aparezca en la lista de hallazgos específicos.
+        2. Distinguí hechos de inferencias:
+           - Hecho (respaldado por un control fallido o un hallazgo listado): redactalo en afirmativo,
+             mencionando de dónde sale ("según lo relevado", "de acuerdo a lo informado por el cliente").
+           - Inferencia (riesgo probable que deducís del contexto pero que no está en los datos de
+             arriba): redactala SIEMPRE en condicional ("podría", "es probable que",
+             "se recomienda verificar"). Nunca la presentes como un hecho.
+        3. No inventes datos técnicos que no estén en la información provista: nada de IPs, puertos,
+           versiones, nombres de sistemas, CVEs ni cantidades que no aparezcan arriba.
+        4. Si no hay información suficiente para una sección, decilo explícitamente en vez de
+           rellenar con supuestos.
+
         Retorna ÚNICAMENTE un objeto JSON válido con las siguientes claves (sin código Markdown, sin bloques ```json, solo texto plano JSON):
         {{
             "executive_summary": "Un resumen ejecutivo del estado actual de ciberseguridad de la empresa, destacando riesgos latentes por su industria y tamaño.",
@@ -76,7 +91,11 @@ def generate_audit_ai_insights(audit_id):
         response = client.chat.completions.create(
             model="gpt-4o-mini",  # Cost-effective, high performance
             messages=[
-                {"role": "system", "content": "Eres un experto en ciberseguridad que genera informes técnicos estructurados en JSON."},
+                {"role": "system", "content": (
+                    "Eres un experto en ciberseguridad que genera informes técnicos estructurados en JSON. "
+                    "Escribes solo lo que los datos respaldan: los hechos en afirmativo y todo lo demás en "
+                    "condicional, marcado como algo a verificar. Nunca inventas evidencia técnica."
+                )},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3
@@ -115,11 +134,12 @@ def generate_mock_insights(company, audit, failed_controls, active_findings):
     foco_text = ", ".join(focos) if focos else "desviaciones menores de controles operativos estándar"
     
     summary = (
-        f"Tras la auditoría realizada a {company.company_name} (Sector: {company.industry}), se determinó una postura "
-        f"de seguridad con un nivel de riesgo global {audit.risk_level.upper()} (Score: {audit.risk_score}/100). "
-        f"Se identificaron brechas de seguridad críticas concentradas principalmente en: {foco_text}. "
-        f"Dada la escala de la empresa ({company.employee_count} empleados), es altamente recomendable mitigar los "
-        f"vectores de entrada más comunes para evitar compromisos que interrumpan la continuidad del negocio."
+        f"Tras la auditoría realizada a {company.company_name} (Sector: {company.industry}), y según la información "
+        f"relevada con la organización, se determinó una postura de seguridad con un nivel de riesgo global "
+        f"{audit.risk_level.upper()} (Score: {audit.risk_score}/100). "
+        f"Las brechas declaradas se concentran principalmente en: {foco_text}. "
+        f"Dada la escala de la empresa ({company.employee_count} empleados), sería recomendable mitigar los "
+        f"vectores de entrada más comunes para reducir el riesgo de una interrupción de la operación."
     )
     
     recs = (

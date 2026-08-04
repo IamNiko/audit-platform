@@ -6,15 +6,29 @@ from database import db
 IMPACT_VALUES = {'Low': 1, 'Medium': 2, 'High': 3, 'Critical': 4}
 PROBABILITY_VALUES = {'Low': 1, 'Medium': 2, 'High': 3}
 
+# Plazos sugeridos de remediación por severidad (STD-002).
+REMEDIATION_SLA = {
+    'Critical': 'Inmediato (≤ 24 h)',
+    'High': '≤ 7 días',
+    'Medium': '≤ 30 días',
+    'Low': '≤ 90 días',
+    'Informational': 'A discreción',
+}
+
 def calculate_finding_risk(impact, probability):
     """
     Calcula el nivel de riesgo de un hallazgo basado en la matriz de impacto y probabilidad.
     Retorna (score, risk_level)
     """
+    # 'Informativa' (STD-002) es una observación sin riesgo inmediato: no entra en la
+    # matriz de impacto x probabilidad ni suma al score global de la auditoría.
+    if impact == 'Informational':
+        return 0, 'Informational'
+
     imp_val = IMPACT_VALUES.get(impact, 2)
     prob_val = PROBABILITY_VALUES.get(probability, 2)
     score = imp_val * prob_val
-    
+
     # Rango de score de 1 a 12
     if score <= 2:
         return score, 'Low'

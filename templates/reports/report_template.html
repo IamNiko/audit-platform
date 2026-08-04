@@ -155,6 +155,7 @@
         .risk-Medium { color: #d97706; background: #fffbeb; border: 1px solid #f59e0b; }
         .risk-High { color: #ea580c; background: #fff7ed; border: 1px solid #f97316; }
         .risk-Critical { color: #dc2626; background: #fef2f2; border: 1px solid #ef4444; }
+        .risk-Informational { color: #475569; background: #f8fafc; border: 1px solid #94a3b8; }
 
         .chart-img {
             display: block;
@@ -307,12 +308,87 @@
             padding-top: 10px;
             margin-top: 24px;
         }
+
+        /* Borrador: marca de agua en cada página hasta que el auditor apruebe el informe. */
+        @page {
+            @top-center {
+                content: string(draft-banner);
+                color: #dc2626;
+                font-size: 8pt;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+        }
+
+        .draft-marker {
+            string-set: draft-banner content();
+            display: block;
+            background: #fef2f2;
+            border: 1.5px solid #dc2626;
+            color: #b91c1c;
+            font-size: 10pt;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 18px;
+        }
+
+        /* Aviso sobre uso de IA y revisión humana (STD-003). */
+        .ai-notice {
+            background: #f8fafc;
+            border-left: 4px solid #0f172a;
+            padding: 12px 16px;
+            margin: 20px 0;
+            font-size: 9pt;
+            color: #334155;
+        }
+
+        .ai-notice h3 {
+            margin: 0 0 6px 0;
+            font-size: 9.5pt;
+            color: #0f172a;
+        }
+
+        /* Bloque de firma del revisor (TPL-007, versión cliente). */
+        .signature-block {
+            border: 1px solid #cbd5e1;
+            padding: 18px 20px;
+            margin-top: 24px;
+            page-break-inside: avoid;
+        }
+
+        .signature-block table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        .signature-block td {
+            padding: 7px 4px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 9pt;
+        }
+
+        .signature-block td.label {
+            color: #64748b;
+            width: 38%;
+        }
+
+        .signature-line {
+            display: inline-block;
+            width: 60mm;
+            border-bottom: 1px solid #0f172a;
+        }
     </style>
 </head>
 <body>
 
     <!-- PORTADA -->
     <div class="cover-page">
+        {% if is_draft %}
+        <div class="draft-marker">BORRADOR — NO DISTRIBUIR</div>
+        {% endif %}
         <div class="cover-brand">Diagnóstico de Ciberseguridad</div>
         <div class="cover-accent"></div>
         <h1 class="cover-title">Informe Ejecutivo de Postura de Seguridad</h1>
@@ -339,6 +415,10 @@
                 <tr>
                     <td class="label">Auditor responsable</td>
                     <td>{{ audit.auditor.username }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Versión del informe</td>
+                    <td>v{{ report_version }}{% if is_draft %} (borrador){% endif %}</td>
                 </tr>
                 <tr>
                     <td class="label">Estado</td>
@@ -381,6 +461,24 @@
 
         <p>{{ audit.executive_summary or 'No se ha redactado el resumen ejecutivo. Se recomienda completar la sección de IA antes de entregar el informe al cliente.' }}</p>
 
+        <!-- Aviso de alcance y uso de IA (STD-003) -->
+        <div class="ai-notice">
+            <h3>Sobre este informe</h3>
+            <p style="margin: 0;">
+                Este documento resume el estado de seguridad de su organización según la información
+                que nos compartió y el alcance acordado. Parte del borrador pudo generarse con
+                herramientas automáticas; <strong>antes de entregárselo, un profesional de The Mini Hack
+                lo revisó y ajustó</strong>.
+            </p>
+            <p style="margin: 8px 0 0 0;">
+                No detecta todos los riesgos posibles ni reemplaza una política de seguridad continua.
+                Las recomendaciones son orientativas para ayudar a priorizar mejoras según su realidad
+                como PyME. El relevamiento refleja la situación observada el
+                {{ audit.audit_date.strftime('%d/%m/%Y') }} y se apoya en las respuestas provistas por
+                la organización.
+            </p>
+        </div>
+
         <h2>Riesgo por categoría</h2>
         <p>Distribución del riesgo relativo en cada dominio evaluado durante la auditoría. Un valor alto indica mayor incumplimiento de controles en esa área.</p>
         <img class="chart-img" src="{{ chart_uri }}" alt="Gráfico de riesgo por categoría">
@@ -414,53 +512,57 @@
     {% endif %}
 
     <!-- 3. HALLAZGOS -->
-    {% if critical_findings or important_findings or low_findings %}
+    {% macro finding_card(f, border_color) %}
+        <div class="finding-card" style="border-left: 4px solid {{ border_color }};">
+            <div class="finding-header">
+                <span class="finding-title">{{ f.title }}</span>
+                <span class="risk-badge risk-{{ f.risk_level }}" style="font-size: 7pt; padding: 2px 8px;">{{ risk_labels.get(f.risk_level, f.risk_level) }}</span>
+            </div>
+            <div class="finding-meta">
+                Categoría: {{ f.category }}
+                {%- if f.risk_level != 'Informational' %} · Impacto: {{ risk_labels.get(f.impact, f.impact) }} · Probabilidad: {{ risk_labels.get(f.probability, f.probability) }}{% endif %}
+                {%- if f.affected_asset %} · Activo afectado: {{ f.affected_asset }}{% endif %}
+            </div>
+            <p style="font-size: 9pt; margin: 0;"><strong>Descripción:</strong> {{ f.description }}</p>
+            {% if f.recommendation %}
+            <div class="finding-rec">
+                <strong>Recomendación:</strong> {{ f.recommendation }}
+                <div style="font-size: 8pt; color: #64748b; margin-top: 5px;">
+                    Plazo sugerido: {{ remediation_sla.get(f.risk_level, 'A definir') }}
+                    {%- if f.remediation_effort %} · Esfuerzo estimado: {{ risk_labels.get(f.remediation_effort, f.remediation_effort) }}{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if f.standard_references %}
+            <div style="font-size: 8pt; color: #64748b; margin-top: 6px;">Referencias: {{ f.standard_references }}</div>
+            {% endif %}
+        </div>
+    {% endmacro %}
+
+    {% if critical_findings or important_findings or low_findings or informational_findings %}
     <div class="{% if failed_controls %}page-break{% endif %}">
         <h1>{% if failed_controls %}3{% else %}2{% endif %}. Detalle de Hallazgos</h1>
         <p>Vulnerabilidades y desviaciones específicas registradas durante la evaluación técnica y de procesos.</p>
 
         {% if critical_findings %}
         <h2>Hallazgos críticos ({{ finding_counts.critical }})</h2>
-        {% for f in critical_findings %}
-        <div class="finding-card" style="border-left: 4px solid #ef4444;">
-            <div class="finding-header">
-                <span class="finding-title">{{ f.title }}</span>
-                <span class="risk-badge risk-Critical" style="font-size: 7pt; padding: 2px 8px;">Crítico</span>
-            </div>
-            <div class="finding-meta">Categoría: {{ f.category }} · Impacto: {{ f.impact }} · Probabilidad: {{ f.probability }}</div>
-            <p style="font-size: 9pt; margin: 0;"><strong>Descripción:</strong> {{ f.description }}</p>
-            <div class="finding-rec"><strong>Recomendación:</strong> {{ f.recommendation }}</div>
-        </div>
-        {% endfor %}
+        {% for f in critical_findings %}{{ finding_card(f, '#ef4444') }}{% endfor %}
         {% endif %}
 
         {% if important_findings %}
         <h2>Hallazgos importantes ({{ finding_counts.high + finding_counts.medium }})</h2>
-        {% for f in important_findings %}
-        <div class="finding-card" style="border-left: 4px solid {% if f.risk_level == 'High' %}#f97316{% else %}#f59e0b{% endif %};">
-            <div class="finding-header">
-                <span class="finding-title">{{ f.title }}</span>
-                <span class="risk-badge risk-{{ f.risk_level }}" style="font-size: 7pt; padding: 2px 8px;">{% if f.risk_level == 'High' %}Alto{% else %}Medio{% endif %}</span>
-            </div>
-            <div class="finding-meta">Categoría: {{ f.category }} · Impacto: {{ f.impact }} · Probabilidad: {{ f.probability }}</div>
-            <p style="font-size: 9pt; margin: 0;"><strong>Descripción:</strong> {{ f.description }}</p>
-            <div class="finding-rec"><strong>Recomendación:</strong> {{ f.recommendation }}</div>
-        </div>
-        {% endfor %}
+        {% for f in important_findings %}{{ finding_card(f, '#f97316' if f.risk_level == 'High' else '#f59e0b') }}{% endfor %}
         {% endif %}
 
         {% if low_findings %}
         <h2>Hallazgos menores ({{ finding_counts.low }})</h2>
-        {% for f in low_findings %}
-        <div class="finding-card" style="border-left: 4px solid #10b981;">
-            <div class="finding-header">
-                <span class="finding-title">{{ f.title }}</span>
-                <span class="risk-badge risk-Low" style="font-size: 7pt; padding: 2px 8px;">Bajo</span>
-            </div>
-            <div class="finding-meta">Categoría: {{ f.category }}</div>
-            <p style="font-size: 9pt; margin: 0;">{{ f.description }}</p>
-        </div>
-        {% endfor %}
+        {% for f in low_findings %}{{ finding_card(f, '#10b981') }}{% endfor %}
+        {% endif %}
+
+        {% if informational_findings %}
+        <h2>Observaciones informativas ({{ finding_counts.informational }})</h2>
+        <p style="font-size: 9pt;">Observaciones sin riesgo inmediato, incluidas como oportunidad de mejora.</p>
+        {% for f in informational_findings %}{{ finding_card(f, '#94a3b8') }}{% endfor %}
         {% endif %}
     </div>
     {% endif %}
@@ -542,6 +644,48 @@
             <p style="font-size: 8.5pt; color: #64748b; margin: 10px 0 0 0;">
                 Contacte a su consultor para una propuesta de implementación adaptada al tamaño y criticidad de {{ company.company_name }}.
             </p>
+        </div>
+
+        <!-- Bloque de revisión y firma (TPL-007, versión cliente) -->
+        <div class="signature-block">
+            <h2 style="margin-top: 0;">Revisión del informe</h2>
+            <p style="font-size: 9pt; margin: 0;">
+                Este informe fue revisado por el equipo técnico de The Mini Hack antes de su entrega.
+            </p>
+            <p style="font-size: 9pt; margin: 8px 0 0 0;">
+                Cuando se utilizó asistencia de inteligencia artificial para el borrador, un profesional
+                de The Mini Hack verificó el contenido, ajustó los hallazgos y validó las recomendaciones
+                según la información proporcionada y el alcance acordado.
+            </p>
+
+            <table>
+                <tr>
+                    <td class="label">Revisado por</td>
+                    <td>{{ (approved_by.username if approved_by else audit.auditor.username) }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Rol</td>
+                    <td>Consultor de ciberseguridad — The Mini Hack</td>
+                </tr>
+                <tr>
+                    <td class="label">Fecha</td>
+                    <td>{% if approved_at %}{{ approved_at.strftime('%Y-%m-%d') }}{% else %}_______________{% endif %}</td>
+                </tr>
+                <tr>
+                    <td class="label">Versión del informe</td>
+                    <td>v{{ report_version }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Firma</td>
+                    <td><span class="signature-line">&nbsp;</span></td>
+                </tr>
+            </table>
+
+            {% if is_draft %}
+            <p style="font-size: 8pt; color: #b91c1c; margin: 12px 0 0 0;">
+                Borrador sin aprobar: no entregar al cliente hasta completar la revisión y firmar.
+            </p>
+            {% endif %}
         </div>
 
         <p class="disclaimer">

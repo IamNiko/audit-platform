@@ -16,7 +16,7 @@ class User(db.Model):
     totp_enabled = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
-    audits = db.relationship('Audit', backref='auditor', lazy=True)
+    audits = db.relationship('Audit', backref='auditor', lazy=True, foreign_keys='Audit.auditor_id')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -87,7 +87,17 @@ class Audit(db.Model):
     action_plan_90 = db.Column(db.Text)
     conclusion = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    
+
+    # Ciclo de vida del informe, separado del estado de la auditoría: el PDF sale
+    # marcado como borrador hasta que el auditor lo aprueba explícitamente. La copia
+    # firmada se firma y se envía fuera de la plataforma, acá queda solo el registro.
+    report_status = db.Column(db.String(20), default='draft', nullable=False)  # 'draft', 'approved'
+    report_version = db.Column(db.String(10), default='1.0', nullable=False)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    approved_by = db.relationship('User', foreign_keys=[approved_by_id])
+
     checklist_responses = db.relationship('ChecklistResponse', backref='audit', lazy=True, cascade='all, delete-orphan')
     findings = db.relationship('Finding', backref='audit', lazy=True, cascade='all, delete-orphan')
     assets = db.relationship('Asset', backref='audit', lazy=True, cascade='all, delete-orphan')
@@ -103,6 +113,10 @@ class Audit(db.Model):
             'risk_score': self.risk_score,
             'risk_level': self.risk_level,
             'executive_summary': self.executive_summary,
+            'report_status': self.report_status,
+            'report_version': self.report_version,
+            'approved_by_id': self.approved_by_id,
+            'approved_at': self.approved_at.isoformat() if self.approved_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -138,11 +152,15 @@ class Finding(db.Model):
     category = db.Column(db.String(80), nullable=False)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
-    impact = db.Column(db.String(20), default='Medium')  # 'Low', 'Medium', 'High', 'Critical'
+    impact = db.Column(db.String(20), default='Medium')  # 'Informational', 'Low', 'Medium', 'High', 'Critical'
     probability = db.Column(db.String(20), default='Medium')  # 'Low', 'Medium', 'High'
-    risk_level = db.Column(db.String(20), default='Medium')  # 'Low', 'Medium', 'High', 'Critical'
+    risk_level = db.Column(db.String(20), default='Medium')  # 'Informational', 'Low', 'Medium', 'High', 'Critical'
     recommendation = db.Column(db.Text)
     status = db.Column(db.String(20), default='open')  # 'open', 'resolved'
+    affected_asset = db.Column(db.String(255))
+    remediation_effort = db.Column(db.String(20), default='Medium')  # 'Low', 'Medium', 'High'
+    # 'references' es palabra reservada en SQL, de ahí el nombre.
+    standard_references = db.Column(db.Text)  # CVE, CIS, OWASP u otra referencia aplicable
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     evidences = db.relationship('Evidence', backref='finding', lazy=True)
@@ -159,6 +177,9 @@ class Finding(db.Model):
             'risk_level': self.risk_level,
             'recommendation': self.recommendation,
             'status': self.status,
+            'affected_asset': self.affected_asset,
+            'remediation_effort': self.remediation_effort,
+            'standard_references': self.standard_references,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

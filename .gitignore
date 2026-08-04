@@ -144,3 +144,8 @@ static/uploads/*
 # Generated PDF reports
 static/reports/
 
+# Client data and framework exports (never commit — see CLAUDE.md §5)
+*.zip
+*.kdbx
+OneDrive_*/
+

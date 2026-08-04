@@ -1,6 +1,7 @@
 # services/pdf_generator.py
 
 import os
+from datetime import datetime, timezone
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -9,8 +10,10 @@ from werkzeug.utils import secure_filename
 from weasyprint import HTML
 from models import Audit, Finding, ChecklistResponse, Asset, Evidence
 from checklist_questions import CHECKLIST_QUESTIONS, get_question_by_key
+from services.risk_engine import REMEDIATION_SLA
 
 RISK_LABELS = {
+    'Informational': 'Informativo',
     'Low': 'Bajo',
     'Medium': 'Medio',
     'High': 'Alto',
@@ -129,6 +132,7 @@ def build_report_context(audit_id):
     critical_findings = [f for f in findings if f.risk_level == 'Critical']
     important_findings = [f for f in findings if f.risk_level in ['High', 'Medium']]
     low_findings = [f for f in findings if f.risk_level == 'Low']
+    informational_findings = [f for f in findings if f.risk_level == 'Informational']
 
     finding_counts = {
         'total': len(findings),
@@ -136,6 +140,7 @@ def build_report_context(audit_id):
         'high': sum(1 for f in findings if f.risk_level == 'High'),
         'medium': sum(1 for f in findings if f.risk_level == 'Medium'),
         'low': len(low_findings),
+        'informational': len(informational_findings),
     }
 
     return {
@@ -147,11 +152,19 @@ def build_report_context(audit_id):
         'critical_findings': critical_findings,
         'important_findings': important_findings,
         'low_findings': low_findings,
+        'informational_findings': informational_findings,
         'finding_counts': finding_counts,
         'assets': assets,
         'evidences': evidences,
         'risk_label': RISK_LABELS.get(audit.risk_level, audit.risk_level),
         'status_label': STATUS_LABELS.get(audit.status, audit.status),
+        'risk_labels': RISK_LABELS,
+        'remediation_sla': REMEDIATION_SLA,
+        # Mientras el informe no esté aprobado, el PDF sale marcado como borrador.
+        'is_draft': audit.report_status != 'approved',
+        'approved_by': audit.approved_by,
+        'approved_at': audit.approved_at,
+        'report_version': audit.report_version,
     }
 
 
@@ -186,8 +199,15 @@ def build_pdf_report(audit_id):
 
     rendered_html = render_template('reports/report_template.html', **report_ctx)
 
+    # Nomenclatura STD-003: <Cliente>_Informe_<Tipo>_v<version>_<YYYY-MM-DD>.pdf
+    # El borrador lleva sufijo para que no se confunda con el entregable final.
     safe_company_name = secure_filename(company.company_name) or f"company_{company.id}"
-    pdf_filename = f"Diagnostico_Ciberseguridad_{safe_company_name}_{audit.id}.pdf"
+    report_date = (audit.audit_date or audit.created_at or datetime.now(timezone.utc)).strftime('%Y-%m-%d')
+    draft_suffix = '_BORRADOR' if ctx['is_draft'] else ''
+    pdf_filename = (
+        f"{safe_company_name}_Informe_Auditoria"
+        f"_v{audit.report_version}_{report_date}{draft_suffix}.pdf"
+    )
     pdf_path = os.path.join(reports_dir, pdf_filename)
 
     HTML(string=rendered_html).write_pdf(pdf_path)
